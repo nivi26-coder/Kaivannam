@@ -6,25 +6,21 @@
 // calling. Server Actions are public HTTP endpoints, so in the MVP every
 // action here must first verify the caller is the order's buyer or artist.
 //
-// Every status change is a single conditional update, e.g.
-//   updateOne({ _id, status: "PLACED" }, { $set: { status: "PAID" } })
-// The filter only matches if the order is still in the expected state, so a
+// Every status change goes through store.updateOrderIf(id, condition, change):
+// the change only applies if the order is still in the expected state, so a
 // double-click, two open tabs or a hand-crafted request can't skip steps or
-// apply the same change twice. MongoDB applies each update atomically.
+// apply the same change twice.
 
 import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { validateInputs, type FieldErrors } from "@/lib/customFields";
 import { addDays, earliestDeliveryYmd, formatDate, isValidYmd, todayIST, ymdToDate } from "@/lib/dates";
-import { connectDB } from "@/lib/db";
-import { ARTIST_ADVANCE, CAN_SEND_PREVIEW, isOrderStatus, type OrderStatus } from "@/lib/orderStatus";
+import { ARTIST_ADVANCE, CAN_SEND_PREVIEW, isOrderStatus } from "@/lib/orderStatus";
 import { calculatePrice } from "@/lib/pricing";
-import type { CustomField, CustomInputs } from "@/lib/types";
+import { getStore } from "@/lib/store";
+import type { CustomInputs } from "@/lib/types";
 import { isValidIndianMobile, normalizePhone } from "@/lib/validation";
-import { Artist } from "@/models/Artist";
-import { Order } from "@/models/Order";
-import { Product } from "@/models/Product";
 
 /** How far ahead buyers can book. */
 const MAX_DAYS_AHEAD = 180;
@@ -48,27 +44,25 @@ export async function createOrder(
   const productId = String(formData.get("productId") ?? "");
   if (!isValidObjectId(productId)) return { message: "This gift could not be found." };
 
-  await connectDB();
-  const product = await Product.findById(productId).lean();
+  const store = getStore();
+  const product = await store.findProduct(productId);
   if (!product) return { message: "This gift could not be found." };
 
-  const artist = await Artist.findById(product.artistId).lean();
-  if (!artist) return { message: "This artist is no longer on Kaivannam." };
+  const { artist } = product;
   if (!artist.isAcceptingOrders) {
     return { message: `${artist.name} has paused new orders for now. Please check back soon.` };
   }
 
   // Read only the fields this product defines. Anything else in the request
   // (say, a "totalPrice" someone added with dev tools) is simply ignored.
-  const customFields = product.customFields as CustomField[];
   const inputs: CustomInputs = {};
-  for (const field of customFields) {
+  for (const field of product.customFields) {
     inputs[field.key] = String(formData.get(`field:${field.key}`) ?? "").trim();
   }
 
   // Validate on the server even though the form also checks: the browser
   // can be bypassed, the server can't.
-  const errors = validateInputs(customFields, inputs);
+  const errors = validateInputs(product.customFields, inputs);
 
   const buyerName = String(formData.get("buyerName") ?? "").trim();
   if (buyerName.length < 2) errors.buyerName = "Please enter your name.";
@@ -92,9 +86,9 @@ export async function createOrder(
   }
 
   // The server decides the price, from the product as stored in the database.
-  const totalPrice = calculatePrice({ basePrice: product.basePrice, customFields }, inputs);
+  const totalPrice = calculatePrice(product, inputs);
 
-  const order = await Order.create({
+  const orderId = await store.insertOrder({
     buyerName,
     buyerPhone,
     artistId: artist._id,
@@ -108,13 +102,12 @@ export async function createOrder(
     // Drop empty optional fields so the order only shows what was filled in.
     inputs: Object.fromEntries(Object.entries(inputs).filter(([, value]) => value)),
     totalPrice,
-    deliverBy: ymdToDate(deliverBy),
-    status: "PLACED",
+    deliverBy: ymdToDate(deliverBy).toISOString(),
   });
 
   revalidatePath("/dashboard");
   // redirect() works by throwing, so it must stay outside any try/catch.
-  redirect(`/orders/${order._id.toString()}`);
+  redirect(`/orders/${orderId}`);
 }
 
 // ------------------------------------------------------------ buyer steps
@@ -125,21 +118,20 @@ export async function createOrder(
  */
 export async function payOrderDemo(orderId: string) {
   if (!isValidObjectId(orderId)) return;
-  await connectDB();
-  await Order.updateOne({ _id: orderId, status: "PLACED" }, { $set: { status: "PAID" } });
+  await getStore().updateOrderIf(orderId, { status: "PLACED" }, { status: "PAID" });
   revalidateOrder(orderId);
 }
 
 export async function approvePreview(orderId: string) {
   if (!isValidObjectId(orderId)) return;
-  await connectDB();
-  const order = await Order.findById(orderId, { status: 1, previews: 1 }).lean();
+  const store = getStore();
+  const order = await store.findOrder(orderId);
   if (!order || order.status !== "PREVIEW_SENT" || order.previews.length === 0) return;
 
-  const last = order.previews.length - 1;
-  await Order.updateOne(
-    { _id: orderId, status: "PREVIEW_SENT", [`previews.${last}.response`]: "pending" },
-    { $set: { status: "APPROVED", [`previews.${last}.response`]: "approved" } },
+  await store.updateOrderIf(
+    orderId,
+    { status: "PREVIEW_SENT", previewCount: order.previews.length, lastPreviewResponse: "pending" },
+    { status: "APPROVED", answerLastPreview: { response: "approved" } },
   );
   revalidateOrder(orderId);
 }
@@ -157,8 +149,8 @@ export async function requestChanges(
   if (comment.length < 5) return { error: "Tell the artist what to change — a few words is enough." };
   if (comment.length > 500) return { error: "Please keep your note under 500 characters." };
 
-  await connectDB();
-  const order = await Order.findById(orderId, { status: 1, previews: 1, productSnapshot: 1 }).lean();
+  const store = getStore();
+  const order = await store.findOrder(orderId);
   if (!order || order.status !== "PREVIEW_SENT" || order.previews.length === 0) {
     return { error: "This preview can't be changed any more. Refresh to see the latest." };
   }
@@ -171,18 +163,12 @@ export async function requestChanges(
     };
   }
 
-  const last = order.previews.length - 1;
-  const result = await Order.updateOne(
-    { _id: orderId, status: "PREVIEW_SENT", [`previews.${last}.response`]: "pending" },
-    {
-      $set: {
-        status: "REVISION_REQUESTED",
-        [`previews.${last}.response`]: "changes_requested",
-        [`previews.${last}.comment`]: comment,
-      },
-    },
+  const applied = await store.updateOrderIf(
+    orderId,
+    { status: "PREVIEW_SENT", previewCount: order.previews.length, lastPreviewResponse: "pending" },
+    { status: "REVISION_REQUESTED", answerLastPreview: { response: "changes_requested", comment } },
   );
-  if (result.modifiedCount === 0) {
+  if (!applied) {
     return { error: "This preview was already answered. Refresh to see the latest." };
   }
 
@@ -198,26 +184,19 @@ export async function requestChanges(
  */
 export async function sendPreview(orderId: string) {
   if (!isValidObjectId(orderId)) return;
-  await connectDB();
-  const order = await Order.findById(orderId, {
-    status: 1,
-    previews: 1,
-    productId: 1,
-    productSnapshot: 1,
-  }).lean();
-  if (!order || !CAN_SEND_PREVIEW.includes(order.status as OrderStatus)) return;
+  const store = getStore();
+  const order = await store.findOrder(orderId);
+  if (!order || !CAN_SEND_PREVIEW.includes(order.status)) return;
 
-  const product = await Product.findById(order.productId, { images: 1 }).lean();
+  const product = await store.findProduct(order.productId);
   const images = product?.images.length ? product.images : [order.productSnapshot.imageUrl];
   const round = order.previews.length + 1;
 
-  await Order.updateOne(
-    // `$size` makes a double-click harmless: the second update finds no match.
-    { _id: orderId, status: order.status, previews: { $size: order.previews.length } },
-    {
-      $set: { status: "PREVIEW_SENT" },
-      $push: { previews: { imageUrl: images[(round - 1) % images.length], round } },
-    },
+  await store.updateOrderIf(
+    // The preview count makes a double-click harmless: the second call no longer matches.
+    orderId,
+    { status: order.status, previewCount: order.previews.length },
+    { status: "PREVIEW_SENT", addPreview: { imageUrl: images[(round - 1) % images.length]!, round } },
   );
   revalidateOrder(orderId);
 }
@@ -228,7 +207,6 @@ export async function advanceOrder(orderId: string, fromStatus: string) {
   const step = ARTIST_ADVANCE[fromStatus];
   if (!step) return;
 
-  await connectDB();
-  await Order.updateOne({ _id: orderId, status: fromStatus }, { $set: { status: step.next } });
+  await getStore().updateOrderIf(orderId, { status: fromStatus }, { status: step.next });
   revalidateOrder(orderId);
 }

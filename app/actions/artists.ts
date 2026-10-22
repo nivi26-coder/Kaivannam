@@ -2,8 +2,7 @@
 
 import { isValidObjectId } from "mongoose";
 import { revalidatePath } from "next/cache";
-import { connectDB } from "@/lib/db";
-import { Artist } from "@/models/Artist";
+import { getStore } from "@/lib/store";
 
 /**
  * The dashboard's pause toggle. We set the value explicitly instead of
@@ -13,8 +12,7 @@ import { Artist } from "@/models/Artist";
  */
 export async function setAcceptingOrders(artistId: string, accepting: boolean) {
   if (!isValidObjectId(artistId)) return;
-  await connectDB();
-  await Artist.updateOne({ _id: artistId }, { $set: { isAcceptingOrders: accepting } });
+  await getStore().setAcceptingOrders(artistId, accepting);
   // The paused state shows on the home, artist, product and dashboard pages.
   revalidatePath("/", "layout");
 }
