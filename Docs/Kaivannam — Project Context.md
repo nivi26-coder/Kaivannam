@@ -237,6 +237,7 @@ Build notes:
 - Demo stand-ins: a simulated *Pay* button (PLACED → PAID), *Send preview* reuses a product photo, and photo fields save only the file name.
 - The order snapshot also stores `imageUrl` and `maxRevisions`, so the revision limit can't change after ordering.
 - Status changes use conditional updates (`updateOne({ _id, status: expected }, …)`) so double-clicks can't skip steps.
+- Without `MONGODB_URI` the app runs on in-memory mock data (`lib/store/mock.ts`, data in `lib/demoData.ts`); a dark strip at the top says so. The seed script writes the same data and IDs to Atlas. Mock mode suits local demos only; on Vercel, connect Atlas first.
 
 ## Roadmap after the demo
 

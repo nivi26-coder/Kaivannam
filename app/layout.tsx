@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono, Hind_Madurai } from "next/font/google";
 import { MockDataBanner } from "@/components/MockDataBanner";
@@ -48,7 +49,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${hindMadurai.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <MockDataBanner />
+        <Suspense fallback={null}>
+          <MockDataBanner />
+        </Suspense>
         <SiteHeader />
         <main className="flex-1">{children}</main>
         <SiteFooter />
