@@ -8,11 +8,11 @@ This is the **demo phase**: a realistic, mobile-first app on a real MongoDB data
 
 ## Stack
 
-Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind CSS 4 + shadcn/ui · MongoDB Atlas + Mongoose 9 · tsx for scripts.
+Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind CSS 4 + shadcn/ui · MongoDB Atlas + Mongoose 9 · Vitest for tests · tsx for scripts.
 
 ## Getting started
 
-**1. Node.js 22.** Next.js 16 needs Node 20.9 or newer. With nvm-windows:
+**1. Node.js 22.** The project needs Node 22.12 or newer (`.nvmrc`). With nvm-windows:
 
 ```bash
 nvm install 22
@@ -68,6 +68,8 @@ It prints links to try, including an order waiting for preview approval and an a
 | `npm run seed` | Reset the database with demo data |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Generate route types and run TypeScript |
+| `npm test` | Unit tests (Vitest); `npm run test:watch` re-runs on save |
+| `npm run check` | Typecheck + lint + tests: run before every commit |
 
 ## Demo walkthrough
 
@@ -82,46 +84,47 @@ The dashboard uses `?artist=<id>` instead of a login. Every order page is reacha
 
 ## Project structure
 
+All code lives in `src/`, in layers. Each layer only depends on the ones below it:
+
 ```text
-app/
-  page.tsx                  home: occasions, gifts, featured artists
-  artists/[id]/page.tsx     artist profile
-  products/[id]/page.tsx    product + customization form
-  orders/[id]/page.tsx      order tracking + preview approval
-  dashboard/page.tsx        artist dashboard (orders, deadlines, pause)
-  actions/orders.ts         Server Actions: createOrder, pay, preview, approve…
-  actions/artists.ts        Server Action: pause / resume orders
-components/
-  CustomizationForm.tsx     client component, live price
-  OrderStatus.tsx           progress timeline
-  ArtistCard.tsx, ProductCard.tsx, …
-  ui/                       shadcn/ui components
-lib/
-  db.ts                     cached Mongoose connection
-  data.ts                   read queries for pages (server only)
-  store/                    where data lives: mongo.ts (Atlas) or mock.ts (in memory)
-  demoData.ts               demo artists, gifts and orders (mock mode + seed)
-  pricing.ts                calculatePrice, shared by browser and server
-  customFields.ts           validation for customization inputs
-  orderStatus.ts            the order lifecycle in one place
-  dates.ts                  delivery-date maths in Indian time
-models/                     Artist, Product, Order (Mongoose)
-scripts/seed.ts             writes demoData.ts into Atlas
+src/
+  app/                       ROUTES ONLY — thin pages that compose features
+    (storefront)/            buyer pages: /, /artists/[id], /products/[id], /orders/[id]
+    (seller)/                artist pages: /dashboard
+  features/                  ONE FOLDER PER BUSINESS AREA — its UI + Server Actions
+    catalog/                 browsing: product & artist cards, gallery, occasions
+    checkout/                CustomizationForm (live price) + placeOrderAction
+    orders/                  order tracking, preview approval + buyer actions
+    seller/                  artist dashboard + artist actions
+  server/                    SERVER-ONLY
+    services/                use cases: placeOrder, payOrder, sendPreview… (+ tests)
+    repositories/            storage behind interfaces: mongo/ (Atlas), mock/ (memory)
+    db/                      Mongoose connection and models
+    queries.ts               reads for pages
+    demo-data.ts             demo artists, gifts, orders (mock mode + seed)
+  domain/                    PURE BUSINESS RULES — no React, Next.js or database (+ tests)
+    pricing.ts, custom-fields.ts, order-status.ts, delivery.ts, buyer.ts, …
+  components/                shared UI: ui/ (shadcn), layout/, common/
+  lib/                       generic helpers: IST dates, ₹ formatting, phone numbers
+  config/                    site constants and environment variables
+scripts/seed.ts              writes demo-data.ts into Atlas
 ```
+
+How a change flows: **form → Server Action** (`features/*/actions.ts`, thin) **→ service** (`server/services`, the rules) **→ repository** (`server/repositories`, the storage). Pages read through `server/queries.ts`. [AGENTS.md](AGENTS.md) lists what belongs where; [the architecture doc](Docs/Kaivannam%20—%20Architecture.md) explains why.
 
 ## Decisions worth knowing
 
-**The server always decides the price.** The form shows a live price using `calculatePrice()`, but it only ever submits the buyer's *choices*. `createOrder` reloads the product from MongoDB, validates every field and recalculates the total. A price sent from the browser is ignored.
+**The server always decides the price.** The form shows a live price using `calculatePrice()`, but it only ever submits the buyer's *choices*. The `placeOrder` service reloads the product, validates every field and recalculates the total. A price sent from the browser is ignored, and a unit test proves it.
 
 **Orders snapshot the product.** Title, base price, image and revision limit are copied into the order, so an artist editing a product later doesn't change past orders.
 
 **Status changes are conditional updates.** For example `updateOne({ _id, status: "PLACED" }, { $set: { status: "PAID" } })`. If the order isn't in the expected state (double-click, two tabs, a hand-made request), nothing happens. Each update is atomic in MongoDB, so no transaction is needed yet. Use transactions when real money moves (Razorpay).
 
-**Pages stream from the database on every request.** With Cache Components, Next.js prerenders a static shell (header, headings, skeletons) and streams database content into it. `lib/data.ts` calls `io()` before each query, so data is always fresh and `next build` never needs a database.
+**Pages stream from the database on every request.** With Cache Components, Next.js prerenders a static shell (header, headings, skeletons) and streams database content into it. `src/server/queries.ts` calls `io()` before each read, so data is always fresh and `next build` never needs a database.
 
-**Mock data or Atlas, same code.** Pages and Server Actions talk to a small `Store` interface (`lib/store/types.ts`), not to Mongoose directly. Without `MONGODB_URI` the in-memory store is used; with it, the MongoDB store. Mock mode works with `npm run dev` and `npm start`, which run as one server process. On Vercel, requests can hit separate serverless instances that don't share memory, so connect Atlas before deploying.
+**Mock data or Atlas, same code.** Services and page queries talk to repository interfaces (`src/server/repositories/types.ts`), not to Mongoose directly. Without `MONGODB_URI` the in-memory repositories are used; with it, the MongoDB ones. Mock mode works with `npm run dev` and `npm start`, which run as one server process. On Vercel, requests can hit separate serverless instances that don't share memory, so connect Atlas before deploying.
 
-**Dates are in Indian time.** Vercel runs in UTC, so between midnight and 5:30 am IST the server's "today" would be yesterday. Delivery dates are handled as `YYYY-MM-DD` in IST (`lib/dates.ts`). The earliest delivery date is today + making time + 2 shipping days.
+**Dates are in Indian time.** Vercel runs in UTC, so between midnight and 5:30 am IST the server's "today" would be yesterday. Delivery dates are handled as `YYYY-MM-DD` in IST (`src/lib/dates.ts`, `src/domain/delivery.ts`). The earliest delivery date is today + making time + 2 shipping days.
 
 **Demo stand-ins.**
 
