@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { UNSPLASH_PARAMS } from "./lib/images";
+import { UNSPLASH_PARAMS } from "./src/lib/images";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,

@@ -1,0 +1,66 @@
+import Link from "next/link";
+import { Clock, RotateCcw } from "lucide-react";
+import { getOccasion } from "@/domain/occasions";
+import type { ProductWithArtist } from "@/domain/types";
+import { formatINR } from "@/lib/format";
+import { ArtistAvatar } from "./ArtistAvatar";
+import { VerifiedBadge } from "./VerifiedBadge";
+
+/** Title, price, artist and description shown next to the product photos. */
+export function ProductDetails({ product }: { product: ProductWithArtist }) {
+  const { artist } = product;
+  return (
+    <>
+      <div className="space-y-2">
+        <h1 className="font-heading text-2xl leading-tight font-semibold sm:text-3xl">
+          {product.title}
+        </h1>
+        <p className="text-lg">
+          <span className="text-muted-foreground">from </span>
+          <span className="font-semibold">{formatINR(product.basePrice)}</span>
+        </p>
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <li className="inline-flex items-center gap-1">
+            <Clock className="size-4" aria-hidden />
+            Made in {artist.makingTimeDays} days
+          </li>
+          <li className="inline-flex items-center gap-1">
+            <RotateCcw className="size-4" aria-hidden />
+            {product.maxRevisions} free preview {product.maxRevisions === 1 ? "revision" : "revisions"}
+          </li>
+        </ul>
+      </div>
+
+      <Link
+        href={`/artists/${artist._id}`}
+        className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-secondary/40"
+      >
+        <ArtistAvatar name={artist.name} avatarUrl={artist.avatarUrl} size={44} />
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 font-medium">
+            {artist.name}
+            {artist.isVerified && <VerifiedBadge />}
+          </p>
+          <p className="text-sm text-muted-foreground">{artist.city} · View profile</p>
+        </div>
+      </Link>
+
+      {product.description && <p className="leading-relaxed whitespace-pre-line">{product.description}</p>}
+
+      {product.occasionTags.length > 0 && (
+        <ul className="flex flex-wrap gap-2" aria-label="Good for">
+          {product.occasionTags.map((slug) => (
+            <li key={slug}>
+              <Link
+                href={`/?occasion=${slug}#gifts`}
+                className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground hover:bg-accent"
+              >
+                {getOccasion(slug).label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
