@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { SubmitButton } from "@/components/common/SubmitButton";
-import { describeInputs } from "@/domain/custom-fields";
 import { ARTIST_ADVANCE, CAN_SEND_PREVIEW } from "@/domain/order-status";
 import { describeDeadline, type DeadlineUrgency } from "@/domain/seller-dashboard";
+import { describeSelections } from "@/domain/product-options";
 import type { OrderWithDetails } from "@/domain/types";
 import { OrderStatusBadge } from "@/features/orders/components/OrderStatusBadge";
 import { formatDate } from "@/lib/dates";
@@ -12,9 +12,9 @@ import { formatPhone } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 import { advanceOrderAction, sendPreviewAction } from "../actions";
 
-/** An active order on the artist dashboard, with the next action to take. */
+/** An active order on the creator dashboard, with the next action to take. */
 export function SellerOrderCard({ order, today }: { order: OrderWithDetails; today: string }) {
-  const details = describeInputs(order.customFields, order.inputs);
+  const details = describeSelections(order.optionGroups, order.selections);
   const lastPreview = order.previews.at(-1);
   const advance = ARTIST_ADVANCE[order.status];
 
@@ -24,15 +24,15 @@ export function SellerOrderCard({ order, today }: { order: OrderWithDetails; tod
         <div className="min-w-0">
           <h3 className="font-medium">{order.productSnapshot.title}</h3>
           <p className="text-sm text-muted-foreground">
-            {orderRef(order._id)} · {formatINR(order.totalPrice)}
+            {orderRef(order._id)} · {formatINR(order.itemTotalPaise)}
           </p>
         </div>
-        <OrderStatusBadge status={order.status} audience="artist" />
+        <OrderStatusBadge status={order.status} audience="creator" />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span>Deliver by {formatDate(order.deliverBy)}</span>
-        <DeadlineChip deliverBy={order.deliverBy} today={today} />
+        <span>Ship by {formatDate(order.dispatchBy)}</span>
+        <DeadlineChip dispatchBy={order.dispatchBy} today={today} />
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -98,7 +98,7 @@ const URGENCY_TONE: Record<DeadlineUrgency, string> = {
   normal: "bg-muted text-muted-foreground",
 };
 
-function DeadlineChip({ deliverBy, today }: { deliverBy: string; today: string }) {
-  const { label, urgency } = describeDeadline(deliverBy, today);
+function DeadlineChip({ dispatchBy, today }: { dispatchBy: string; today: string }) {
+  const { label, urgency } = describeDeadline(dispatchBy, today);
   return <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", URGENCY_TONE[urgency])}>{label}</span>;
 }

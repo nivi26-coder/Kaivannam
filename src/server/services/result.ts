@@ -1,4 +1,4 @@
-import type { FieldErrors } from "@/domain/custom-fields";
+import type { FieldErrors } from "@/domain/errors";
 
 // Services return a Result instead of throwing for expected problems
 // ("artist paused", "invalid phone"). Callers must handle both cases, and

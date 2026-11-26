@@ -1,12 +1,12 @@
-import { ArtistCard } from "@/features/catalog/components/ArtistCard";
-import { getAllArtists } from "@/server/queries";
+import { CreatorCard } from "@/features/catalog/components/CreatorCard";
+import { getAllCreators } from "@/server/queries";
 
 /**
- * DEMO: there's no login, so the dashboard starts by asking which artist you
- * are. In the MVP the artist comes from the signed-in session instead.
+ * DEMO: there's no login, so the dashboard starts by asking which creator you
+ * are. In the MVP the creator comes from the signed-in session instead.
  */
-export async function ArtistPicker({ notice }: { notice?: string }) {
-  const artists = await getAllArtists();
+export async function CreatorPicker({ notice }: { notice?: string }) {
+  const creators = await getAllCreators();
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
       <div>
@@ -18,9 +18,9 @@ export async function ArtistPicker({ notice }: { notice?: string }) {
       </div>
       {notice && <p className="rounded-lg bg-accent px-3 py-2 text-sm">{notice}</p>}
       <ul className="grid gap-3 sm:grid-cols-2">
-        {artists.map((artist) => (
-          <li key={artist._id}>
-            <ArtistCard artist={artist} href={`/dashboard?artist=${artist._id}`} />
+        {creators.map((creator) => (
+          <li key={creator._id}>
+            <CreatorCard creator={creator} href={`/dashboard?artist=${creator._id}`} />
           </li>
         ))}
       </ul>

@@ -1,43 +1,69 @@
-// calculatePrice is shared by the browser and the server:
-// - the CustomizationForm calls it to show a live price while the buyer types;
+// Item price and production time from the buyer's choices.
+//
+// Shared by the browser and the server:
+// - the configurator calls it to show a live total and making time;
 // - the placeOrder service calls it again with the product loaded from the
 //   database, and that result is what gets saved.
 //
 // The browser never sends a price. Even if someone edits the page or crafts a
-// request by hand, the server recomputes the total from trusted data.
+// request by hand, the server recomputes everything from trusted data.
 //
 // Keep this file free of database/Node imports so it can run in the browser.
 
-import type { CustomField, CustomInputs } from "./types";
+import { sum, type Paise } from "./money";
+import { chosenOptions, type OptionGroup, type Selections } from "./product-options";
 
 export interface PricedProduct {
-  basePrice: number;
-  customFields: CustomField[];
+  basePricePaise: Paise;
+  baseProductionDays: number;
+  optionGroups: OptionGroup[];
 }
 
 export interface PriceLine {
   label: string;
-  amount: number;
+  amountPaise: Paise;
+  extraDays: number;
 }
 
-/** Base price plus the modifier of every chosen select option. Whole rupees. */
-export function calculatePrice(product: PricedProduct, inputs: CustomInputs): number {
-  return getPriceLines(product, inputs).reduce((sum, line) => sum + line.amount, 0);
+export interface ItemQuote {
+  /** Base price first, then every chosen option that changes price or time. */
+  lines: PriceLine[];
+  itemTotalPaise: Paise;
+  productionDays: number;
 }
 
-/** The same calculation, itemised so the buyer can see where the price comes from. */
-export function getPriceLines(product: PricedProduct, inputs: CustomInputs): PriceLine[] {
-  const lines: PriceLine[] = [{ label: "Base price", amount: product.basePrice }];
+/**
+ * Base price + chosen options' modifiers; base production days + chosen
+ * options' extra days. Unknown option values add nothing (and are rejected
+ * by validateSelections on the server).
+ */
+export function quoteItem(product: PricedProduct, selections: Selections): ItemQuote {
+  const lines: PriceLine[] = [{ label: "Base price", amountPaise: product.basePricePaise, extraDays: 0 }];
 
-  for (const field of product.customFields) {
-    if (field.type !== "select") continue;
-    // Only options that exist on the product count. An unknown value adds
-    // nothing here and is rejected by validateInputs on the server.
-    const chosen = field.options.find((option) => option.value === inputs[field.key]);
-    if (chosen && chosen.priceModifier !== 0) {
-      lines.push({ label: `${field.label}: ${chosen.label}`, amount: chosen.priceModifier });
+  for (const { group, option } of chosenOptions(product.optionGroups, selections)) {
+    if (option.pricePaise !== 0 || option.extraDays !== 0) {
+      lines.push({ label: `${group.label}: ${option.label}`, amountPaise: option.pricePaise, extraDays: option.extraDays });
     }
   }
 
-  return lines;
+  return {
+    lines,
+    itemTotalPaise: sum(lines.map((line) => line.amountPaise)),
+    productionDays: product.baseProductionDays + lines.reduce((days, line) => days + line.extraDays, 0),
+  };
+}
+
+/** Lowest possible item total: base price plus the cheapest way to satisfy required groups. */
+export function startingPrice(product: PricedProduct): Paise {
+  let total = product.basePricePaise;
+  for (const group of product.optionGroups) {
+    if (group.type === "single" && group.required && group.options.length > 0) {
+      total += Math.min(...group.options.map((o) => o.pricePaise));
+    }
+    if (group.type === "multi" && group.min > 0) {
+      const cheapest = group.options.map((o) => o.pricePaise).sort((a, b) => a - b);
+      total += sum(cheapest.slice(0, group.min));
+    }
+  }
+  return total;
 }

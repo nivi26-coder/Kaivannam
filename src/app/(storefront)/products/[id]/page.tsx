@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import { deliveryWindow } from "@/domain/delivery";
 import { PausedNotice } from "@/features/catalog/components/PausedNotice";
 import { ProductDetails } from "@/features/catalog/components/ProductDetails";
 import { ProductGallery } from "@/features/catalog/components/ProductGallery";
 import { CustomizationForm } from "@/features/checkout/components/CustomizationForm";
+import { todayIST } from "@/lib/dates";
 import { getProduct } from "@/server/queries";
 
 export default async function ProductPage({ params }: PageProps<"/products/[id]">) {
@@ -11,7 +11,7 @@ export default async function ProductPage({ params }: PageProps<"/products/[id]"
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const { artist } = product;
+  const { creator } = product;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10 lg:py-8">
@@ -21,22 +21,21 @@ export default async function ProductPage({ params }: PageProps<"/products/[id]"
       </div>
 
       <div className="mt-8 lg:mt-0">
-        {!artist.isAcceptingOrders && (
+        {!creator.isAcceptingOrders && (
           <PausedNotice className="mb-5">
-            {artist.name} has paused new orders for now. Check back soon, or browse other artists.
+            {creator.name} has paused new orders for now. Check back soon, or browse other artists.
           </PausedNotice>
         )}
         <CustomizationForm
           productId={product._id}
-          basePrice={product.basePrice}
-          customFields={product.customFields}
+          basePricePaise={product.basePricePaise}
+          baseProductionDays={product.baseProductionDays}
+          optionGroups={product.optionGroups}
           maxRevisions={product.maxRevisions}
-          artistName={artist.name}
-          makingTimeDays={artist.makingTimeDays}
-          isAcceptingOrders={artist.isAcceptingOrders}
-          // Computed here, at request time and in Indian time, so the
-          // browser's clock and time zone don't matter.
-          delivery={deliveryWindow(artist.makingTimeDays)}
+          isAcceptingOrders={creator.isAcceptingOrders}
+          // Today in India, computed here at request time, so the browser's
+          // clock and time zone don't affect the delivery estimate.
+          today={todayIST()}
         />
       </div>
     </div>

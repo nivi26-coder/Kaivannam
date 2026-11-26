@@ -82,7 +82,7 @@ src/
     (seller)/
       dashboard/                /dashboard
   features/                     ONE FOLDER PER BUSINESS AREA
-    catalog/components/         ProductCard, ArtistCard, ProductGallery, OccasionChips, HomeHero…
+    catalog/components/         ProductCard, CreatorCard, ProductGallery, OccasionChips, HomeHero…
     checkout/                   components/CustomizationForm.tsx, actions.ts (placeOrderAction)
     orders/                     components/ (OrderNextStep, OrderTimeline…), actions.ts (pay, approve, request changes)
     seller/                     components/ (SellerOrderCard, PauseToggle…), actions.ts (send preview, advance, pause)
@@ -94,12 +94,20 @@ src/
     revalidate.ts               which pages to refresh after a change
     demo-data.ts                demo artists, gifts and orders
   domain/                       PURE BUSINESS RULES (+ *.test.ts)
-    types.ts                    Artist, Product, Order… shapes used everywhere
-    pricing.ts                  calculatePrice, getPriceLines
-    custom-fields.ts            validateInputs, describeInputs
-    order-status.ts             statuses, labels, allowed moves
-    delivery.ts                 delivery window, validateDeliverBy
-    buyer.ts                    validateBuyerDetails
+    types.ts                    Creator, Product, Order… shapes used everywhere
+    money.ts                    integer paise, rupees(), percentOf() with one rounding rule
+    product-options.ts          option groups (single, multi, text, photo); selections
+    pricing.ts                  quoteItem: item total, price lines, production days
+    delivery.ts                 estimateDelivery: dispatch and arrival dates
+    payment-plan.ts             mockup fee, advance, balance + shipping (Phase 1)
+    settlement.ts               commission, GST, TCS, TDS, releases, reconciliation (Phase 1)
+    order-lifecycle.ts          Phase 1 statuses, who may act, refunds, deadlines
+    order-status.ts             the demo's simpler flow (replaced by order-lifecycle in E6)
+    india.ts                    GST state codes, pincodes, GSTIN checksum
+    creator-rules.ts            handles, own-state shipping rule
+    product-rules.ts            what a product needs before publishing
+    buyer.ts                    buyer details, shipping address
+    order-number.ts             KV-YYMM-NNNNN order numbers
     seller-dashboard.ts         dashboard totals, deadline labels
     occasions.ts                occasion list
   components/                   SHARED UI
@@ -136,12 +144,12 @@ Server-only modules start with `import "server-only"`, which fails the build if 
 
 | URL | Reads (`server/queries`) | Writes (Server Actions) | Browser components |
 | --- | --- | --- | --- |
-| `/` and `/?occasion=birthday` | `getProducts`, `getFeaturedArtists` | — | — |
-| `/artists/[id]` | `getArtist`, `getArtistProducts`, `getCompletedOrderCount` | — | — |
+| `/` and `/?occasion=birthday` | `getProducts`, `getFeaturedCreators` | — | — |
+| `/artists/[id]` | `getCreator`, `getCreatorProducts`, `getCompletedOrderCount` | — | — |
 | `/products/[id]` | `getProduct` | `placeOrderAction` | `CustomizationForm` |
 | `/orders/[id]` | `getOrder` | `payOrderAction`, `approvePreviewAction`, `requestChangesAction` | `RequestChangesForm`, `SubmitButton` |
 | `/dashboard` | `getAllArtists` (picker) | — | — |
-| `/dashboard?artist=[id]` | `getArtist`, `getArtistOrders` | `setAcceptingOrdersAction`, `sendPreviewAction`, `advanceOrderAction` | `SubmitButton` |
+| `/dashboard?artist=[id]` | `getCreator`, `getCreatorOrders` | `setAcceptingOrdersAction`, `sendPreviewAction`, `advanceOrderAction` | `SubmitButton` |
 
 There are no logins in the demo. Buyers reach an order through its link; the dashboard picks the artist with `?artist=`.
 
@@ -193,7 +201,7 @@ sequenceDiagram
     participant S as placeOrder service
     participant R as Repositories
     Buyer->>F: Picks options, types name
-    F->>F: calculatePrice() shows live total
+    F->>F: quoteItem() shows live total and making time
     Buyer->>F: Place order
     F->>F: Same domain checks for instant errors
     F->>A: FormData with productId, field values, name, phone, deliverBy
@@ -201,7 +209,7 @@ sequenceDiagram
     S->>R: products.findById(productId)
     R-->>S: product + artist
     S->>S: Keep only the product's fields, validate them, buyer and date
-    S->>S: calculatePrice() with the stored product
+    S->>S: quoteItem() with the stored product; dates from production days
     S->>R: orders.create(snapshot, inputs, totalPrice)
     R-->>S: orderId
     S-->>A: Result ok with orderId
@@ -339,7 +347,7 @@ Embedded inside documents (no separate collections):
 - **`Order.inputs`**: the buyer's answers keyed by field `key`. Select fields store the option `value`; the UI looks up labels from the product.
 - **`Order.previews[]`**: `imageUrl`, `round`, `response` (`pending`, `approved` or `changes_requested`), `comment`, `createdAt`.
 
-Indexes: `Product.artistId`, `Product.occasionTags`, `Order.artistId`, `Order.status`. Models live in `server/db/models/` and are named `ArtistModel`, `ProductModel`, `OrderModel` to keep them apart from the domain types `Artist`, `Product`, `Order`.
+Indexes: `Product.creatorId`, `Product.occasionTags`, `Order.creatorId`, `Order.status`. Models live in `server/db/models/` and are named `CreatorModel`, `ProductModel`, `OrderModel` to keep them apart from the domain types `Creator`, `Product`, `Order`.
 
 ## 12. Rules that keep it correct
 
@@ -347,7 +355,7 @@ Indexes: `Product.artistId`, `Product.occasionTags`, `Order.artistId`, `Order.st
 | --- | --- | --- |
 | The server decides the price | `placeOrder` recalculates with `domain/pricing.ts`; no price is ever submitted | A tampered request can't change what's charged |
 | Only known fields are read | `placeOrder` keeps only the product's `customFields` keys | Extra fields in a request are ignored |
-| One set of validation rules | `domain/custom-fields.ts`, `buyer.ts`, `delivery.ts`, used by form and service | Browser checks can be bypassed; the server repeats them with the same code |
+| One set of validation rules | `domain/product-options.ts`, `buyer.ts`, used by form and service | Browser checks can be bypassed; the server repeats them with the same code |
 | Snapshot product data into orders | `productSnapshot` | Later edits to a product don't change past orders |
 | Status changes are conditional | `orders.updateIf` | No skipped steps or double changes |
 | Dates are in Indian time | `lib/dates.ts` (`YYYY-MM-DD` in IST), `domain/delivery.ts` | Vercel runs in UTC; between midnight and 5:30 am IST, "today" would otherwise be wrong |
@@ -363,7 +371,10 @@ Indexes: `Product.artistId`, `Product.occasionTags`, `Order.artistId`, `Order.st
 | Test file | Proves |
 | --- | --- |
 | `domain/pricing.test.ts` | Modifiers add up; unknown options and text fields never change the price |
-| `domain/custom-fields.test.ts` | Required fields, listed options only, length limits, readable labels |
+| `domain/money.test.ts`, `payment-plan.test.ts`, `settlement.test.ts` | Paise rounding; mockup credit and milestones; fees and taxes; 2,000 random orders reconcile to the paisa |
+| `domain/product-options.test.ts`, `pricing.test.ts` | Option-group rules, selections, price and production days |
+| `domain/order-lifecycle.test.ts` | Both checkout paths, who may act, refunds, deadlines, dispute window |
+| `domain/creator-rules.test.ts`, `product-rules.test.ts`, `order-number.test.ts` | Handles, GSTIN checksum, own-state shipping, publish rules |
 | `domain/delivery.test.ts` | The delivery window, including the IST-midnight case |
 | `domain/buyer.test.ts` | Phone numbers normalise (`+91`, `0`, spaces) and invalid ones fail |
 | `domain/seller-dashboard.test.ts` | Dashboard totals and deadline labels |
@@ -401,7 +412,7 @@ Each roadmap feature has a clear home in this structure:
 | **Image uploads** | The browser uploads directly to Cloudinary with a signature from a Server Action; orders and previews store the URL. Add the host to `remotePatterns` and keys to `config/env.ts`. |
 | **Cart (several gifts per checkout)** | A `features/cart` area, a `CartRepository`, and a `checkout` service that turns a cart into one order per artist, reusing `placeOrder`'s rules. |
 | **Reviews from real orders only** | A `Review` model and repository; a service that allows one review per DELIVERED order. |
-| **"Deliver by" filter** | A domain function over `makingTimeDays` + `SHIPPING_DAYS`, used by a new `products.list` option. |
+| **"Deliver by" filter** | A domain function over production days + transit days (`domain/delivery.ts`), used by a new `products.list` option. |
 | **Faster catalogue pages** | `"use cache"` + `cacheTag` in `server/queries.ts`, expired with `updateTag` from the Server Actions that change products or artists. |
 | **WhatsApp notifications** (Growth) | A `server/notifications/` module called from Server Actions with `after()`, so the buyer doesn't wait for it. |
 

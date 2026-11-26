@@ -21,17 +21,17 @@ export function OrderSummary({ order }: { order: OrderWithDetails }) {
         )}
         <div className="min-w-0 space-y-1">
           <h1 className="font-heading text-xl leading-snug font-semibold">{order.productSnapshot.title}</h1>
-          {order.artist && (
+          {order.creator && (
             <p className="text-sm text-muted-foreground">
               by{" "}
-              <Link href={`/artists/${order.artist._id}`} className="underline underline-offset-2">
-                {order.artist.name}
+              <Link href={`/artists/${order.creator._id}`} className="underline underline-offset-2">
+                {order.creator.name}
               </Link>
             </p>
           )}
           <p className="text-sm">
-            <span className="font-semibold">{formatINR(order.totalPrice)}</span>
-            <span className="text-muted-foreground"> · deliver by {formatDate(order.deliverBy)}</span>
+            <span className="font-semibold">{formatINR(order.itemTotalPaise)}</span>
+            <span className="text-muted-foreground"> · arrives around {formatDate(order.estimatedDelivery)}</span>
           </p>
         </div>
       </div>

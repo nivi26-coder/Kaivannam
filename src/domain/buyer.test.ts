@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { validateBuyerDetails } from "./buyer";
+import { validateBuyerDetails, validateShippingAddress, type ShippingAddress } from "./buyer";
+
+describe("validateShippingAddress", () => {
+  const address: ShippingAddress = {
+    recipientName: " Kala  Akka ",
+    recipientPhone: "+91 98400 12345",
+    line1: " 12,  Kamarajar Street ",
+    line2: "",
+    city: "Coimbatore",
+    stateCode: "33",
+    pincode: " 641002 ",
+  };
+
+  it("tidies a valid address for the courier label", () => {
+    expect(validateShippingAddress(address)).toEqual({
+      value: { ...address, recipientName: "Kala Akka", recipientPhone: "9840012345", line1: "12, Kamarajar Street", pincode: "641002" },
+      errors: {},
+    });
+  });
+
+  it("reports each problem", () => {
+    const { errors } = validateShippingAddress({ ...address, recipientName: "", recipientPhone: "123", line1: "12", city: "", stateCode: "99", pincode: "64100" });
+    expect(Object.keys(errors).sort()).toEqual(["city", "line1", "pincode", "recipientName", "recipientPhone", "stateCode"]);
+  });
+});
 
 describe("validateBuyerDetails", () => {
   it.each([

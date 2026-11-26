@@ -1,44 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { todayIST } from "@/lib/dates";
-import { deliveryWindow, MAX_DAYS_AHEAD, SHIPPING_DAYS, validateDeliverBy } from "./delivery";
+import { DEFAULT_TRANSIT_DAYS, estimateDelivery } from "./delivery";
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("deliveryWindow", () => {
-  it("is making time + shipping days from today, up to 6 months ahead", () => {
-    expect(SHIPPING_DAYS).toBe(2);
-    expect(MAX_DAYS_AHEAD).toBe(180);
-    expect(deliveryWindow(5, "2026-11-10")).toEqual({ earliest: "2026-11-17", latest: "2027-05-09" });
+describe("estimateDelivery", () => {
+  it("is production days to dispatch, then courier transit days", () => {
+    expect(estimateDelivery({ productionDays: 7, transitDays: 4, today: "2026-11-26" })).toEqual({
+      dispatchBy: "2026-12-03",
+      deliverBy: "2026-12-07",
+    });
+  });
+
+  it("assumes default transit days until Shiprocket provides real ones", () => {
+    expect(DEFAULT_TRANSIT_DAYS).toBe(3);
+    expect(estimateDelivery({ productionDays: 5, today: "2026-11-26" }).deliverBy).toBe("2026-12-04");
   });
 
   it("uses India's date, not the server's UTC date", () => {
-    // 19:00 UTC on 10 Nov is 00:30 IST on 11 Nov: a UTC server would still say the 10th.
+    // 19:00 UTC on 25 Nov is 00:30 IST on 26 Nov: a UTC server would still say the 25th.
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-11-10T19:00:00Z"));
-    expect(todayIST()).toBe("2026-11-11");
-    expect(deliveryWindow(5).earliest).toBe("2026-11-18");
-  });
-});
-
-describe("validateDeliverBy", () => {
-  const window = deliveryWindow(5, "2026-11-10");
-
-  it("accepts dates inside the window, including both ends", () => {
-    expect(validateDeliverBy("2026-11-17", window, "Kavya")).toBeUndefined();
-    expect(validateDeliverBy("2027-05-09", window, "Kavya")).toBeUndefined();
+    vi.setSystemTime(new Date("2026-11-25T19:00:00Z"));
+    expect(todayIST()).toBe("2026-11-26");
+    expect(estimateDelivery({ productionDays: 7, transitDays: 0 }).dispatchBy).toBe("2026-12-03");
   });
 
-  it("explains when the artist can't make it in time", () => {
-    expect(validateDeliverBy("2026-11-16", window, "Kavya")).toBe(
-      "The earliest Kavya can deliver is Tue, 17 Nov.",
-    );
-  });
-
-  it("rejects dates too far ahead and invalid dates", () => {
-    expect(validateDeliverBy("2027-05-10", window, "Kavya")).toMatch(/6 months/);
-    expect(validateDeliverBy("2026-02-30", window, "Kavya")).toBe("Choose a delivery date.");
-    expect(validateDeliverBy("", window, "Kavya")).toBe("Choose a delivery date.");
+  it("rejects impossible durations", () => {
+    expect(() => estimateDelivery({ productionDays: -1 })).toThrow(RangeError);
+    expect(() => estimateDelivery({ productionDays: 2, transitDays: 1.5 })).toThrow(RangeError);
   });
 });

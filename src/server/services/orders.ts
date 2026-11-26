@@ -20,11 +20,10 @@
 import "server-only";
 import { isValidObjectId } from "mongoose";
 import { validateBuyerDetails } from "@/domain/buyer";
-import { validateInputs } from "@/domain/custom-fields";
-import { deliveryWindow, validateDeliverBy } from "@/domain/delivery";
+import { estimateDelivery } from "@/domain/delivery";
 import { ARTIST_ADVANCE, CAN_SEND_PREVIEW, isOrderStatus } from "@/domain/order-status";
-import { calculatePrice } from "@/domain/pricing";
-import type { CustomInputs } from "@/domain/types";
+import { quoteItem } from "@/domain/pricing";
+import { normalizeSelections, validateSelections } from "@/domain/product-options";
 import { ymdToDate } from "@/lib/dates";
 import { getRepositories, type Repositories } from "@/server/repositories";
 import { fail, ok, type Result } from "./result";
@@ -38,10 +37,8 @@ export interface PlaceOrderInput {
   productId: string;
   buyerName: string;
   buyerPhone: string;
-  /** "YYYY-MM-DD" */
-  deliverBy: string;
-  /** Raw customization values from the form, keyed by field key. */
-  inputs: CustomInputs;
+  /** Raw answers from the form, keyed by option group (lists for multi-choice). */
+  selections: Record<string, string | string[]>;
 }
 
 export async function placeOrder(
@@ -53,50 +50,47 @@ export async function placeOrder(
   const product = await repos.products.findById(input.productId);
   if (!product) return fail("This gift could not be found.");
 
-  const { artist } = product;
-  if (!artist.isAcceptingOrders) {
-    return fail(`${artist.name} has paused new orders for now. Please check back soon.`);
+  const { creator } = product;
+  if (!creator.isAcceptingOrders) {
+    return fail(`${creator.name} has paused new orders for now. Please check back soon.`);
   }
 
-  // Keep only the fields this product defines. Anything else in the request
-  // (say, a "totalPrice" someone added with dev tools) is simply ignored.
-  const inputs: CustomInputs = {};
-  for (const field of product.customFields) {
-    inputs[field.key] = (input.inputs[field.key] ?? "").trim();
-  }
+  // Keep only the groups this product defines. Anything else in the request
+  // (say, a "totalPrice" someone added with dev tools) is simply dropped.
+  const selections = normalizeSelections(product.optionGroups, input.selections);
 
   // The same checks the form runs, repeated here because the browser can be
   // bypassed and the server can't.
-  const errors = validateInputs(product.customFields, inputs);
+  const errors = validateSelections(product.optionGroups, selections);
   const buyer = validateBuyerDetails(input);
   Object.assign(errors, buyer.errors);
-  const deliverByError = validateDeliverBy(
-    input.deliverBy,
-    deliveryWindow(artist.makingTimeDays),
-    artist.name,
-  );
-  if (deliverByError) errors.deliverBy = deliverByError;
-
   if (Object.keys(errors).length > 0) return fail("Please check the highlighted fields.", errors);
 
-  // The server decides the price, from the product as stored.
-  const totalPrice = calculatePrice(product, inputs);
+  // The server decides the price and the dates, from the product as stored.
+  const quote = quoteItem(product, selections);
+  const estimate = estimateDelivery({ productionDays: quote.productionDays });
 
   const orderId = await repos.orders.create({
     ...buyer.value,
-    artistId: artist._id,
+    creatorId: creator._id,
     productId: product._id,
     // A copy of the product as it is now: later edits won't change this order.
     productSnapshot: {
       title: product.title,
-      basePrice: product.basePrice,
+      basePricePaise: product.basePricePaise,
+      baseProductionDays: product.baseProductionDays,
       imageUrl: product.images[0] ?? "",
       maxRevisions: product.maxRevisions,
     },
-    // Drop empty optional fields so the order only shows what was filled in.
-    inputs: Object.fromEntries(Object.entries(inputs).filter(([, value]) => value)),
-    totalPrice,
-    deliverBy: ymdToDate(input.deliverBy).toISOString(),
+    // Drop empty optional answers so the order only shows what was filled in.
+    selections: Object.fromEntries(
+      Object.entries(selections).filter(([, value]) => (Array.isArray(value) ? value.length > 0 : value)),
+    ),
+    priceLines: quote.lines,
+    itemTotalPaise: quote.itemTotalPaise,
+    productionDays: quote.productionDays,
+    dispatchBy: ymdToDate(estimate.dispatchBy).toISOString(),
+    estimatedDelivery: ymdToDate(estimate.deliverBy).toISOString(),
   });
 
   return ok({ orderId });

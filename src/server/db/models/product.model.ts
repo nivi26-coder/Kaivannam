@@ -1,43 +1,58 @@
 import { Schema, model, models, type InferSchemaType, type Model } from "mongoose";
 import { OCCASION_SLUGS } from "@/domain/occasions";
 
-// Custom fields live inside the product document rather than in their own
-// collection: each product has a different form, and MongoDB's flexible
-// documents make that natural. `_id: false` because these are never
-// referenced on their own.
+// Option groups live inside the product document: each product has its own
+// form. Their full rules are checked in domain/product-options.ts before
+// saving; the schema only guards the basic shape.
 
-const optionSchema = new Schema(
+const choiceSchema = new Schema(
   {
     value: { type: String, required: true },
     label: { type: String, required: true },
-    priceModifier: { type: Number, default: 0, validate: Number.isInteger },
+    /** Integer paise; can be 0 or negative. */
+    pricePaise: { type: Number, default: 0, validate: Number.isInteger },
+    extraDays: { type: Number, default: 0, min: 0 },
   },
   { _id: false },
 );
 
-const customFieldSchema = new Schema(
+const optionGroupSchema = new Schema(
   {
     key: { type: String, required: true },
     label: { type: String, required: true },
-    type: { type: String, enum: ["text", "image", "select"], required: true },
-    required: { type: Boolean, default: false },
-    options: { type: [optionSchema], default: [] },
+    type: { type: String, enum: ["single", "multi", "text", "photo"], required: true },
+    required: { type: Boolean },
+    options: { type: [choiceSchema], default: undefined },
+    min: { type: Number },
+    max: { type: Number },
+    maxLength: { type: Number },
   },
   { _id: false },
 );
 
 const productSchema = new Schema(
   {
-    artistId: { type: Schema.Types.ObjectId, ref: "Artist", required: true, index: true },
+    creatorId: { type: Schema.Types.ObjectId, ref: "Creator", required: true, index: true },
+    slug: { type: String, required: true },
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
-    /** Whole rupees. Razorpay wants paise, so multiply by 100 at payment time. */
-    basePrice: { type: Number, required: true, min: 0, validate: Number.isInteger },
     images: { type: [String], default: [] },
     occasionTags: { type: [{ type: String, enum: OCCASION_SLUGS }], default: [], index: true },
-    /** How many times the buyer may ask for changes to the preview. */
+    /** Integer paise (₹1 = 100). */
+    basePricePaise: { type: Number, required: true, min: 0, validate: Number.isInteger },
+    baseProductionDays: { type: Number, required: true, min: 1 },
+    optionGroups: { type: [optionGroupSchema], default: [] },
     maxRevisions: { type: Number, default: 2, min: 0 },
-    customFields: { type: [customFieldSchema], default: [] },
+    /** Null when the product has no paid mockup. */
+    mockupFeePaise: { type: Number, default: null },
+    advancePercent: { type: Number, required: true, min: 20, max: 60 },
+    weightGrams: { type: Number, required: true, min: 1 },
+    packageCm: {
+      length: { type: Number, required: true },
+      width: { type: Number, required: true },
+      height: { type: Number, required: true },
+    },
+    isListed: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

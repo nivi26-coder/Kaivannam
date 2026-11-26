@@ -2,7 +2,7 @@ import Image from "next/image";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export function ArtistAvatar({
+export function CreatorAvatar({
   name,
   avatarUrl,
   size = 48,

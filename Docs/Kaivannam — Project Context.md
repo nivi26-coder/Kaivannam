@@ -198,7 +198,7 @@ Phase 1 planning is done (Nov 20, 2026); the next step is the E0 approvals (task
 **Phase 1**
 
 - [ ] E0 Accounts and approvals: CA and entity, Razorpay Route, Shiprocket, WhatsApp BSP, OTP channel, domain, legal documents
-- [ ] E1 Foundation: Supabase schema, RLS, repositories, paise money rules
+- [ ] E1 Foundation: Supabase schema, RLS, repositories (✅ T1.5 and T1.6 done Nov 26: paise, option groups, production days, money module, plus all Phase 1 business rules in `src/domain/` with 111 tests)
 - [ ] E2 Phone OTP sign-in and roles
 - [ ] E3 Creator onboarding
 - [ ] E4 Product configurator builder

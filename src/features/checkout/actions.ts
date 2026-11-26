@@ -5,8 +5,8 @@
 // live in src/server/services.
 
 import { redirect } from "next/navigation";
-import type { FieldErrors } from "@/domain/custom-fields";
-import { getPrefixed, getString } from "@/lib/form-data";
+import type { FieldErrors } from "@/domain/errors";
+import { getPrefixedValues, getString } from "@/lib/form-data";
 import { revalidateOrder } from "@/server/revalidate";
 import { placeOrder } from "@/server/services/orders";
 
@@ -23,10 +23,10 @@ export async function placeOrderAction(
     productId: getString(formData, "productId"),
     buyerName: getString(formData, "buyerName"),
     buyerPhone: getString(formData, "buyerPhone"),
-    deliverBy: getString(formData, "deliverBy"),
-    // Customization fields are named "field:<key>". The service keeps only
-    // the keys the product defines. Note there is no price here.
-    inputs: getPrefixed(formData, "field:"),
+    // Option answers are named "option:<group key>"; checkboxes repeat the
+    // name. The service keeps only the groups the product defines. Note
+    // there is no price here.
+    selections: getPrefixedValues(formData, "option:"),
   });
 
   if (!result.ok) return { message: result.error, errors: result.fieldErrors };

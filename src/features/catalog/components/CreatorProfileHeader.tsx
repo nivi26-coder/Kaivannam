@@ -1,32 +1,32 @@
-import { Clock, MapPin, Package } from "lucide-react";
-import type { Artist } from "@/domain/types";
-import { ArtistAvatar } from "./ArtistAvatar";
+import { AtSign, MapPin, Package } from "lucide-react";
+import type { Creator } from "@/domain/types";
+import { CreatorAvatar } from "./CreatorAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 
-export function ArtistProfileHeader({
-  artist,
+export function CreatorProfileHeader({
+  creator,
   completedOrders,
 }: {
-  artist: Artist;
+  creator: Creator;
   completedOrders: number;
 }) {
   return (
     <header className="flex items-start gap-4">
-      <ArtistAvatar name={artist.name} avatarUrl={artist.avatarUrl} size={80} />
+      <CreatorAvatar name={creator.name} avatarUrl={creator.avatarUrl} size={80} />
       <div className="min-w-0 space-y-1">
         <div className="flex items-center gap-1.5">
-          <h1 className="font-heading text-2xl font-semibold">{artist.name}</h1>
-          {artist.isVerified && <VerifiedBadge />}
+          <h1 className="font-heading text-2xl font-semibold">{creator.name}</h1>
+          {creator.isVerified && <VerifiedBadge />}
         </div>
-        <p className="text-sm text-muted-foreground">{artist.categories.join(" · ")}</p>
+        <p className="text-sm text-muted-foreground">{creator.categories.join(" · ")}</p>
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <li className="inline-flex items-center gap-1">
             <MapPin className="size-4" aria-hidden />
-            {artist.city}, {artist.state}
+            {creator.city}, {creator.state}
           </li>
           <li className="inline-flex items-center gap-1">
-            <Clock className="size-4" aria-hidden />
-            Makes in {artist.makingTimeDays} days
+            <AtSign className="size-4" aria-hidden />
+            {creator.handle}
           </li>
           <li className="inline-flex items-center gap-1">
             <Package className="size-4" aria-hidden />

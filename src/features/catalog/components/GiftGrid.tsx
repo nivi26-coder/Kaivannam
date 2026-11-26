@@ -18,7 +18,7 @@ export async function GiftGrid({ occasion }: { occasion?: OccasionSlug }) {
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
           {products.map((product) => (
-            <ProductCard key={product._id} product={product} artist={product.artist} />
+            <ProductCard key={product._id} product={product} creator={product.creator} />
           ))}
         </div>
       )}

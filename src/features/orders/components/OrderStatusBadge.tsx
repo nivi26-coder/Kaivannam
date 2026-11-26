@@ -20,10 +20,10 @@ export function OrderStatusBadge({
   className,
 }: {
   status: OrderStatus;
-  audience?: "buyer" | "artist";
+  audience?: "buyer" | "creator";
   className?: string;
 }) {
-  const label = audience === "artist" ? ARTIST_STATUS_LABEL[status] : BUYER_STATUS_LABEL[status];
+  const label = audience === "creator" ? ARTIST_STATUS_LABEL[status] : BUYER_STATUS_LABEL[status];
   return (
     <span
       className={cn(

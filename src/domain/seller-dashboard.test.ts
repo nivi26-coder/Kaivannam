@@ -12,12 +12,15 @@ function order(id: string, status: OrderStatus, deliverBy: string, totalPrice: n
     _id: id,
     buyerName: "Buyer",
     buyerPhone: "9840012345",
-    artistId: "a",
+    creatorId: "a",
     productId: "p",
-    productSnapshot: { title: "Gift", basePrice: totalPrice, imageUrl: "", maxRevisions: 2 },
-    inputs: {},
-    totalPrice,
-    deliverBy: due(deliverBy),
+    productSnapshot: { title: "Gift", basePricePaise: totalPrice, baseProductionDays: 5, imageUrl: "", maxRevisions: 2 },
+    selections: {},
+    priceLines: [],
+    itemTotalPaise: totalPrice,
+    productionDays: 5,
+    dispatchBy: due(deliverBy),
+    estimatedDelivery: due(deliverBy),
     status,
     previews: [],
     createdAt: "",
@@ -45,7 +48,7 @@ describe("summarizeSellerOrders", () => {
   });
 
   it("only counts paid orders as money held", () => {
-    expect(summary.held).toBe(500 + 300 + 200);
+    expect(summary.heldPaise).toBe(500 + 300 + 200);
   });
 });
 

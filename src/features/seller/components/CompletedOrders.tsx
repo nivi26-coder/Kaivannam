@@ -14,12 +14,12 @@ export function CompletedOrders({ orders }: { orders: OrderWithDetails[] }) {
             <div className="min-w-0">
               <p className="truncate font-medium">{order.productSnapshot.title}</p>
               <p className="text-muted-foreground">
-                {order.buyerName} · {formatDate(order.deliverBy)}
+                {order.buyerName} · {formatDate(order.estimatedDelivery)}
               </p>
             </div>
             <div className="text-right">
-              <p className="font-medium">{formatINR(order.totalPrice)}</p>
-              <OrderStatusBadge status={order.status} audience="artist" />
+              <p className="font-medium">{formatINR(order.itemTotalPaise)}</p>
+              <OrderStatusBadge status={order.status} audience="creator" />
             </div>
           </li>
         ))}

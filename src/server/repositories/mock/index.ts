@@ -7,7 +7,7 @@
 //   memory, so use Atlas there.
 
 import type { Repositories } from "../types";
-import { createMockArtistRepository } from "./artists";
+import { createMockCreatorRepository } from "./creators";
 import { createMockDatabase, type MockDatabase } from "./database";
 import { createMockOrderRepository } from "./orders";
 import { createMockProductRepository } from "./products";
@@ -15,7 +15,7 @@ import { createMockProductRepository } from "./products";
 /** Repositories over the given database. Tests pass a fresh one each time. */
 export function createMockRepositories(db: MockDatabase = createMockDatabase()): Repositories {
   return {
-    artists: createMockArtistRepository(db),
+    creators: createMockCreatorRepository(db),
     products: createMockProductRepository(db),
     orders: createMockOrderRepository(db),
   };

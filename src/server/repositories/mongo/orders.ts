@@ -1,23 +1,24 @@
 import "server-only";
 import { isValidObjectId } from "mongoose";
-import type { CustomField, Order, OrderWithDetails } from "@/domain/types";
+import type { OptionGroup } from "@/domain/product-options";
+import type { Order, OrderWithDetails } from "@/domain/types";
 import { connectDB } from "@/server/db/connect";
 import { OrderModel } from "@/server/db/models/order.model";
 import { lastPreviewIndex, type OrderRepository } from "../types";
 import { serialize } from "./serialize";
 
-type PopulatedOrder = Omit<Order, "artistId" | "productId"> & {
-  artistId: { _id: string; name: string; city: string } | null;
-  productId: { _id: string; customFields: CustomField[] } | null;
+type PopulatedOrder = Omit<Order, "creatorId" | "productId"> & {
+  creatorId: { _id: string; name: string; city: string } | null;
+  productId: { _id: string; optionGroups: OptionGroup[] } | null;
 };
 
 function withDetails(order: PopulatedOrder): OrderWithDetails {
   return {
     ...order,
-    artistId: order.artistId?._id ?? "",
+    creatorId: order.creatorId?._id ?? "",
     productId: order.productId?._id ?? "",
-    artist: order.artistId,
-    customFields: order.productId?.customFields ?? null,
+    creator: order.creatorId,
+    optionGroups: order.productId?.optionGroups ?? null,
   };
 }
 
@@ -26,27 +27,27 @@ export const mongoOrderRepository: OrderRepository = {
     if (!isValidObjectId(id)) return null;
     await connectDB();
     const order = await OrderModel.findById(id)
-      .populate("artistId", "name city")
-      .populate("productId", "customFields")
+      .populate("creatorId", "name city")
+      .populate("productId", "optionGroups")
       .lean();
     return order ? withDetails(serialize<PopulatedOrder>(order)) : null;
   },
 
-  async listByArtist(artistId) {
-    if (!isValidObjectId(artistId)) return [];
+  async listByCreator(creatorId) {
+    if (!isValidObjectId(creatorId)) return [];
     await connectDB();
-    const orders = await OrderModel.find({ artistId })
-      .sort({ deliverBy: 1 })
-      .populate("artistId", "name city")
-      .populate("productId", "customFields")
+    const orders = await OrderModel.find({ creatorId })
+      .sort({ dispatchBy: 1 })
+      .populate("creatorId", "name city")
+      .populate("productId", "optionGroups")
       .lean();
     return serialize<PopulatedOrder[]>(orders).map(withDetails);
   },
 
-  async countCompletedByArtist(artistId) {
-    if (!isValidObjectId(artistId)) return 0;
+  async countCompletedByCreator(creatorId) {
+    if (!isValidObjectId(creatorId)) return 0;
     await connectDB();
-    return OrderModel.countDocuments({ artistId, status: { $in: ["DELIVERED", "PAYOUT_RELEASED"] } });
+    return OrderModel.countDocuments({ creatorId, status: { $in: ["DELIVERED", "PAYOUT_RELEASED"] } });
   },
 
   async create(order) {

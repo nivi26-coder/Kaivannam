@@ -10,36 +10,36 @@
 import type { OccasionSlug } from "@/domain/occasions";
 import type { OrderStatus } from "@/domain/order-status";
 import type {
-  Artist,
+  Creator,
   Order,
   OrderWithDetails,
   PreviewResponse,
   Product,
-  ProductWithArtist,
+  ProductWithCreator,
 } from "@/domain/types";
 
-export interface ArtistRepository {
-  /** Verified and accepting artists first. */
-  listFeatured(limit: number): Promise<Artist[]>;
-  /** All artists, by name. */
-  list(): Promise<Artist[]>;
+export interface CreatorRepository {
+  /** Verified and accepting creators first. */
+  listFeatured(limit: number): Promise<Creator[]>;
+  /** All creators, by name. */
+  list(): Promise<Creator[]>;
   /** Null for unknown ids, including ones that aren't valid ObjectIds. */
-  findById(id: string): Promise<Artist | null>;
+  findById(id: string): Promise<Creator | null>;
   setAcceptingOrders(id: string, accepting: boolean): Promise<void>;
 }
 
 export interface ProductRepository {
-  list(options: { occasion?: OccasionSlug; limit: number }): Promise<ProductWithArtist[]>;
-  listByArtist(artistId: string): Promise<Product[]>;
-  findById(id: string): Promise<ProductWithArtist | null>;
+  list(options: { occasion?: OccasionSlug; limit: number }): Promise<ProductWithCreator[]>;
+  listByCreator(creatorId: string): Promise<Product[]>;
+  findById(id: string): Promise<ProductWithCreator | null>;
 }
 
 export interface OrderRepository {
   findById(id: string): Promise<OrderWithDetails | null>;
-  /** Soonest deadline first. */
-  listByArtist(artistId: string): Promise<OrderWithDetails[]>;
+  /** Soonest dispatch deadline first. */
+  listByCreator(creatorId: string): Promise<OrderWithDetails[]>;
   /** Orders delivered through the platform. */
-  countCompletedByArtist(artistId: string): Promise<number>;
+  countCompletedByCreator(creatorId: string): Promise<number>;
   /** Creates a PLACED order and returns its id. */
   create(order: NewOrder): Promise<string>;
   /** Applies `change` only if the order matches `condition`. Returns whether it applied. */
@@ -47,7 +47,7 @@ export interface OrderRepository {
 }
 
 export interface Repositories {
-  artists: ArtistRepository;
+  creators: CreatorRepository;
   products: ProductRepository;
   orders: OrderRepository;
 }
@@ -56,12 +56,15 @@ export type NewOrder = Pick<
   Order,
   | "buyerName"
   | "buyerPhone"
-  | "artistId"
+  | "creatorId"
   | "productId"
   | "productSnapshot"
-  | "inputs"
-  | "totalPrice"
-  | "deliverBy"
+  | "selections"
+  | "priceLines"
+  | "itemTotalPaise"
+  | "productionDays"
+  | "dispatchBy"
+  | "estimatedDelivery"
 >;
 
 /**

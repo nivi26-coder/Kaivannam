@@ -103,7 +103,8 @@ src/
     queries.ts               reads for pages
     demo-data.ts             demo artists, gifts, orders (mock mode + seed)
   domain/                    PURE BUSINESS RULES — no React, Next.js or database (+ tests)
-    pricing.ts, custom-fields.ts, order-status.ts, delivery.ts, buyer.ts, …
+    money.ts (paise), product-options.ts, pricing.ts, payment-plan.ts, settlement.ts,
+    order-lifecycle.ts, delivery.ts, india.ts, creator-rules.ts, product-rules.ts, …
   components/                shared UI: ui/ (shadcn), layout/, common/
   lib/                       generic helpers: IST dates, ₹ formatting, phone numbers
   config/                    site constants and environment variables
@@ -114,7 +115,7 @@ How a change flows: **form → Server Action** (`features/*/actions.ts`, thin) *
 
 ## Decisions worth knowing
 
-**The server always decides the price.** The form shows a live price using `calculatePrice()`, but it only ever submits the buyer's *choices*. The `placeOrder` service reloads the product, validates every field and recalculates the total. A price sent from the browser is ignored, and a unit test proves it.
+**The server always decides the price.** The form shows a live price using `quoteItem()`, but it only ever submits the buyer's *choices*. The `placeOrder` service reloads the product, validates every field and recalculates the total. A price sent from the browser is ignored, and a unit test proves it.
 
 **Orders snapshot the product.** Title, base price, image and revision limit are copied into the order, so an artist editing a product later doesn't change past orders.
 

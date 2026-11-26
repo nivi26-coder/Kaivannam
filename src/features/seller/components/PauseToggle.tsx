@@ -1,11 +1,11 @@
 import { CirclePause, CirclePlay } from "lucide-react";
 import { SubmitButton } from "@/components/common/SubmitButton";
-import type { Artist } from "@/domain/types";
+import type { Creator } from "@/domain/types";
 import { cn } from "@/lib/utils";
 import { setAcceptingOrdersAction } from "../actions";
 
-export function PauseToggle({ artist }: { artist: Artist }) {
-  const accepting = artist.isAcceptingOrders;
+export function PauseToggle({ creator }: { creator: Creator }) {
+  const accepting = creator.isAcceptingOrders;
   return (
     <section
       className={cn(
@@ -31,7 +31,7 @@ export function PauseToggle({ artist }: { artist: Artist }) {
             : "Buyers can see your work but can't order until you resume."}
         </p>
       </div>
-      <form action={setAcceptingOrdersAction.bind(null, artist._id, !accepting)}>
+      <form action={setAcceptingOrdersAction.bind(null, creator._id, !accepting)}>
         <SubmitButton variant={accepting ? "outline" : "default"} className="h-10 px-4">
           {accepting ? (
             <>

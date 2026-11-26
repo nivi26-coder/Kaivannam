@@ -3,17 +3,17 @@ import { formatINR } from "@/lib/format";
 export function SellerStats({
   activeCount,
   dueThisWeek,
-  held,
+  heldPaise,
 }: {
   activeCount: number;
   dueThisWeek: number;
-  held: number;
+  heldPaise: number;
 }) {
   return (
     <dl className="grid grid-cols-3 gap-3">
       <Stat label="Active orders" value={String(activeCount)} />
-      <Stat label="Due in 7 days" value={String(dueThisWeek)} />
-      <Stat label="Held for you" value={formatINR(held)} />
+      <Stat label="Ship in 7 days" value={String(dueThisWeek)} />
+      <Stat label="Held for you" value={formatINR(heldPaise)} />
     </dl>
   );
 }

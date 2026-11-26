@@ -62,7 +62,7 @@ Status: **PRD** = taken from the PRD · **Proposed** = this spec's suggestion, n
 | # | Topic | Decision | Status |
 | --- | --- | --- | --- |
 | D1 | Database and backend | Supabase (Postgres, Phone Auth, Storage, Realtime) replaces MongoDB. The repository layer keeps the change inside `src/server/repositories`. | **Decided** (Nov 20) |
-| D2 | Money unit | Store every amount as integer **paise** (`bigint`). Percentages create fractions of a rupee, and Razorpay works in paise. | Proposed |
+| D2 | Money unit | Store every amount as integer **paise** (`bigint`). Percentages create fractions of a rupee, and Razorpay works in paise. | **Decided** (Nov 26), done in T1.5 |
 | D3 | Domain | `kaivannam.in/<handle>` used as a placeholder; the PRD says `appname.in`. | Open |
 | D4 | Where creators can ship | Pan-India per PRD, **except** creators without a GSTIN ship only within their own state. Sellers without GST registration may sell through an e-commerce operator only intra-state. Enforced at the pincode check. | PRD + CA |
 | D5 | Mockup fee credit | The paid mockup fee is deducted from the **advance**. | Proposed |
@@ -447,6 +447,8 @@ Sizes: **S** ≈ half a day · **M** ≈ 1 day · **L** ≈ 3 days, for one deve
 
 **Payments come last (D20).** E6 builds checkout and the milestone flow against a test gateway; E13 plugs in Razorpay Route at the end. Everything in between can be built and shown to creators without waiting for Razorpay's approval.
 
+**Progress (Nov 26, 2026).** ✅ T1.5 and T1.6 are done, plus the pure business rules that later tasks need, all in `src/domain/` with unit tests (111 in total): the Phase 1 order lifecycle for T6.3 and T9.x, handle, GSTIN and own-state rules for T3.1 and T5.3, product publish rules for T4.x, shipping-address validation for T6.2, and order numbers. Those later tasks now only need their UI, storage and integrations. The demo still runs its simpler flow (`order-status.ts`) until T6.3 switches to `order-lifecycle.ts`.
+
 ### E0 — Accounts and approvals (founder-owned; start on day 1)
 
 These have external waiting times of days to weeks, so they gate the launch more than the code does.
@@ -469,8 +471,8 @@ These have external waiting times of days to weeks, so they gate the launch more
 | T1.2 | Migrations: enums, tables (section 7.3), constraints, indexes, order-number sequence | M | all | T1.1 |
 | T1.3 | RLS policies for every table and bucket, with policy tests | M | AUTH-4 | T1.2 |
 | T1.4 | Supabase clients (`@supabase/ssr`), `proxy.ts` session refresh, generated DB types | M | AUTH | T1.2 |
-| T1.5 | Domain rework: paise, option groups (single, multi, text, photo), production days, delivery estimate; rename artist → creator; tests | L | PROD, STORE, section 5 | — |
-| T1.6 | Domain money module: advance, balance, mockup credit, commission and promo, GST, TCS, TDS, reconciliation; tests | M | section 5 | T1.5 |
+| T1.5 ✅ | Domain rework: paise, option groups (single, multi, text, photo), production days, delivery estimate; rename artist → creator; tests | L | PROD, STORE, section 5 | — |
+| T1.6 ✅ | Domain money module: advance, balance, mockup credit, commission and promo, GST, TCS, TDS, reconciliation; tests | M | section 5 | T1.5 |
 | T1.7 | Supabase repositories behind the existing interfaces (extended for the new tables); mock repositories kept in step | L | all | T1.2, T1.5 |
 | T1.8 | Postgres functions for money-moving transitions, so status, milestone and ledger change in one transaction | M | PAY, PAYOUT | T1.2 |
 | T1.9 | Storage buckets and policies; upload helper with in-browser compression and signed URLs | M | STORE-2, ROOM | T1.3 |

@@ -1,11 +1,11 @@
 import "server-only";
 import type { Repositories } from "../types";
-import { mongoArtistRepository } from "./artists";
+import { mongoCreatorRepository } from "./creators";
 import { mongoOrderRepository } from "./orders";
 import { mongoProductRepository } from "./products";
 
 export const mongoRepositories: Repositories = {
-  artists: mongoArtistRepository,
+  creators: mongoCreatorRepository,
   products: mongoProductRepository,
   orders: mongoOrderRepository,
 };

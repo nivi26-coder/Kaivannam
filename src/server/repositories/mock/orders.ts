@@ -9,17 +9,17 @@ export function createMockOrderRepository(db: MockDatabase): OrderRepository {
       return order ? withDetails(db, order) : null;
     },
 
-    async listByArtist(artistId) {
+    async listByCreator(creatorId) {
       return db.orders
-        .filter((o) => o.artistId === artistId)
-        .sort((a, b) => a.deliverBy.localeCompare(b.deliverBy))
+        .filter((o) => o.creatorId === creatorId)
+        .sort((a, b) => a.dispatchBy.localeCompare(b.dispatchBy))
         .map((o) => withDetails(db, o));
     },
 
-    async countCompletedByArtist(artistId) {
+    async countCompletedByCreator(creatorId) {
       return db.orders.filter(
         (o) =>
-          o.artistId === artistId && (o.status === "DELIVERED" || o.status === "PAYOUT_RELEASED"),
+          o.creatorId === creatorId && (o.status === "DELIVERED" || o.status === "PAYOUT_RELEASED"),
       ).length;
     },
 

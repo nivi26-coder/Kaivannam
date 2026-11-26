@@ -1,36 +1,36 @@
 import type { Metadata } from "next";
 import { summarizeSellerOrders } from "@/domain/seller-dashboard";
-import { ArtistPicker } from "@/features/seller/components/ArtistPicker";
+import { CreatorPicker } from "@/features/seller/components/CreatorPicker";
 import { CompletedOrders } from "@/features/seller/components/CompletedOrders";
 import { DashboardHeader } from "@/features/seller/components/DashboardHeader";
 import { PauseToggle } from "@/features/seller/components/PauseToggle";
 import { SellerOrderCard } from "@/features/seller/components/SellerOrderCard";
 import { SellerStats } from "@/features/seller/components/SellerStats";
 import { todayIST } from "@/lib/dates";
-import { getArtist, getArtistOrders } from "@/server/queries";
+import { getCreator, getCreatorOrders } from "@/server/queries";
 
 export const metadata: Metadata = { title: "Artist dashboard" };
 
-// DEMO: there's no login yet, so the artist is chosen with ?artist=<id>.
+// DEMO: there's no login yet, so the creator is chosen with ?artist=<id>.
 // In the MVP this comes from the signed-in user's session instead.
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
-  const { artist: artistId } = await searchParams;
-  if (typeof artistId !== "string" || !artistId) return <ArtistPicker />;
+  const { artist: creatorId } = await searchParams;
+  if (typeof creatorId !== "string" || !creatorId) return <CreatorPicker />;
 
-  const artist = await getArtist(artistId);
-  if (!artist) return <ArtistPicker notice="That artist wasn't found. Pick one below." />;
+  const creator = await getCreator(creatorId);
+  if (!creator) return <CreatorPicker notice="That artist wasn't found. Pick one below." />;
 
   const today = todayIST();
-  const { active, completed, dueThisWeek, held } = summarizeSellerOrders(
-    await getArtistOrders(artist._id),
+  const { active, completed, dueThisWeek, heldPaise } = summarizeSellerOrders(
+    await getCreatorOrders(creator._id),
     today,
   );
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-      <DashboardHeader artist={artist} />
-      <PauseToggle artist={artist} />
-      <SellerStats activeCount={active.length} dueThisWeek={dueThisWeek} held={held} />
+      <DashboardHeader creator={creator} />
+      <PauseToggle creator={creator} />
+      <SellerStats activeCount={active.length} dueThisWeek={dueThisWeek} heldPaise={heldPaise} />
 
       <section className="space-y-3">
         <h2 className="font-heading text-lg font-semibold">Active orders</h2>

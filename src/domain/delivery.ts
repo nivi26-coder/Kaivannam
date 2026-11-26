@@ -1,41 +1,40 @@
-// Delivery-date rules: when can a gift arrive?
+// When will the gift arrive?
 //
-// The earliest date is today (in India) + the artist's making time + courier
-// days. The server computes the window at request time and hands it to the
-// form, so the browser's clock and time zone never matter.
+// Ready to ship (dispatch) = today (India) + production days.
+// Delivered = dispatch + courier transit days.
+// In Phase 1 the transit days come from Shiprocket's pincode check (T5.3);
+// until then DEFAULT_TRANSIT_DAYS stands in.
+//
+// The server computes dates at request time and passes `today` to the
+// browser, so the buyer's clock and time zone never matter.
 
-import { addDays, formatDate, isValidYmd, todayIST } from "@/lib/dates";
+import { addDays, todayIST } from "@/lib/dates";
 
-/** Days we allow for courier delivery after the artist finishes making. */
-export const SHIPPING_DAYS = 2;
+/** Courier days assumed until the Shiprocket pincode check provides real ones. */
+export const DEFAULT_TRANSIT_DAYS = 3;
 
-/** How far ahead buyers can book. */
-export const MAX_DAYS_AHEAD = 180;
-
-export interface DeliveryWindow {
-  /** "YYYY-MM-DD" */
-  earliest: string;
-  /** "YYYY-MM-DD" */
-  latest: string;
+export interface DeliveryEstimate {
+  /** "YYYY-MM-DD": the creator should hand the parcel to the courier by this day. */
+  dispatchBy: string;
+  /** "YYYY-MM-DD": expected arrival. */
+  deliverBy: string;
 }
 
-export function deliveryWindow(makingTimeDays: number, today: string = todayIST()): DeliveryWindow {
-  return {
-    earliest: addDays(today, makingTimeDays + SHIPPING_DAYS),
-    latest: addDays(today, MAX_DAYS_AHEAD),
-  };
-}
-
-/** An error message for the buyer, or undefined if the date is fine. */
-export function validateDeliverBy(
-  deliverBy: string,
-  window: DeliveryWindow,
-  artistName: string,
-): string | undefined {
-  if (!isValidYmd(deliverBy)) return "Choose a delivery date.";
-  if (deliverBy < window.earliest) {
-    return `The earliest ${artistName} can deliver is ${formatDate(window.earliest)}.`;
+export function estimateDelivery({
+  productionDays,
+  transitDays = DEFAULT_TRANSIT_DAYS,
+  today = todayIST(),
+}: {
+  productionDays: number;
+  transitDays?: number;
+  today?: string;
+}): DeliveryEstimate {
+  if (!Number.isInteger(productionDays) || productionDays < 0) {
+    throw new RangeError(`Invalid production days: ${productionDays}`);
   }
-  if (deliverBy > window.latest) return "Please choose a date within the next 6 months.";
-  return undefined;
+  if (!Number.isInteger(transitDays) || transitDays < 0) {
+    throw new RangeError(`Invalid transit days: ${transitDays}`);
+  }
+  const dispatchBy = addDays(today, productionDays);
+  return { dispatchBy, deliverBy: addDays(dispatchBy, transitDays) };
 }

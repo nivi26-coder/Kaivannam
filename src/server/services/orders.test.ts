@@ -2,7 +2,9 @@
 // Same demo data as the app, so the scenarios read like real orders.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addDays } from "@/lib/dates";
+import { DEFAULT_TRANSIT_DAYS } from "@/domain/delivery";
+import { rupees } from "@/domain/money";
+import { addDays, ymdToDate } from "@/lib/dates";
 import { createMockRepositories } from "@/server/repositories/mock";
 import type { Repositories } from "@/server/repositories/types";
 import { buildDemoData, type DemoData } from "@/server/demo-data";
@@ -27,21 +29,20 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   data = buildDemoData(NOW);
-  repos = createMockRepositories({ artists: data.artists, products: data.products, orders: data.orders });
+  repos = createMockRepositories({ creators: data.creators, products: data.products, orders: data.orders });
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A valid order for Arjun's pencil portrait (base ₹1,199, makes in 7 days). */
+/** A valid order for Arjun's pencil portrait (base ₹1,199, made in 7 days). */
 function pencilOrder(overrides: Partial<PlaceOrderInput> = {}): PlaceOrderInput {
   return {
     productId: data.productIds.pencil!,
     buyerName: "Test Buyer",
     buyerPhone: "+91 98400 12345",
-    deliverBy: addDays(TODAY, 10),
-    inputs: { photo: "family.jpg", people: "2", size: "a3", frame: "teak" },
+    selections: { photo: "family.jpg", people: "2", size: "a3", frame: "teak" },
     ...overrides,
   };
 }
@@ -60,19 +61,25 @@ describe("placeOrder", () => {
   it("saves the price the server calculates, ignoring anything extra the browser sends", async () => {
     const orderId = await placed(
       pencilOrder({
-        inputs: {
+        selections: {
           photo: "family.jpg",
-          people: "2", // +600
-          size: "a3", // +700
-          frame: "teak", // +650
+          people: "2", // +₹600, +1 day
+          size: "a3", // +₹700, +1 day
+          frame: "teak", // +₹650, +1 day
           totalPrice: "1", // not a field of this product: must be ignored
         },
       }),
     );
 
     const order = await repos.orders.findById(orderId);
-    expect(order?.totalPrice).toBe(1199 + 600 + 700 + 650);
-    expect(order?.inputs).not.toHaveProperty("totalPrice");
+    expect(order?.itemTotalPaise).toBe(rupees(1199 + 600 + 700 + 650));
+    expect(order?.selections).not.toHaveProperty("totalPrice");
+    expect(order?.priceLines.map((l) => l.label)).toEqual([
+      "Base price",
+      "People in the portrait: 2 people",
+      "Size: A3",
+      "Frame: Teak wood frame",
+    ]);
     expect(order?.status).toBe("PLACED");
   });
 
@@ -80,7 +87,8 @@ describe("placeOrder", () => {
     const order = await repos.orders.findById(await placed());
     expect(order?.productSnapshot).toMatchObject({
       title: "Pencil Portrait from Your Photo",
-      basePrice: 1199,
+      basePricePaise: rupees(1199),
+      baseProductionDays: 7,
       maxRevisions: 2,
     });
     expect(order?.buyerPhone).toBe("9840012345");
@@ -88,7 +96,7 @@ describe("placeOrder", () => {
 
   it("rejects options the product doesn't offer", async () => {
     const result = await placeOrder(
-      pencilOrder({ inputs: { photo: "a.jpg", people: "1", size: "a4", frame: "gold-plated" } }),
+      pencilOrder({ selections: { photo: "a.jpg", people: "1", size: "a4", frame: "gold-plated" } }),
       repos,
     );
     expect(result).toMatchObject({ ok: false, fieldErrors: { frame: "Please choose one of the listed options." } });
@@ -96,20 +104,36 @@ describe("placeOrder", () => {
 
   it("reports every problem at once", async () => {
     const result = await placeOrder(
-      pencilOrder({ buyerName: "", buyerPhone: "123", inputs: { people: "1", size: "a4", frame: "none" } }),
+      pencilOrder({ buyerName: "", buyerPhone: "123", selections: { people: "1", size: "a4", frame: "none" } }),
       repos,
     );
     expect(result.ok).toBe(false);
     expect(!result.ok && Object.keys(result.fieldErrors ?? {}).sort()).toEqual(["buyerName", "buyerPhone", "photo"]);
   });
 
-  it("rejects delivery dates the artist can't meet", async () => {
-    // Arjun needs 7 days + 2 for shipping.
-    const result = await placeOrder(pencilOrder({ deliverBy: addDays(TODAY, 8) }), repos);
-    expect(!result.ok && result.fieldErrors?.deliverBy).toBe(
-      "The earliest Arjun Selvam can deliver is Thu, 19 Nov.",
+  it("sets the dates from production days: options can add making time", async () => {
+    // 7 base days + 1 (2 people) + 1 (A3) + 1 (teak frame) = 10 days, then the courier.
+    const order = await repos.orders.findById(await placed());
+    expect(order?.productionDays).toBe(10);
+    expect(order?.dispatchBy).toBe(ymdToDate(addDays(TODAY, 10)).toISOString());
+    expect(order?.estimatedDelivery).toBe(ymdToDate(addDays(TODAY, 10 + DEFAULT_TRANSIT_DAYS)).toISOString());
+  });
+
+  it("accepts multi-choice add-ons and prices each one", async () => {
+    const result = await placeOrder(
+      {
+        productId: data.productIds.crate!,
+        buyerName: "Test Buyer",
+        buyerPhone: "9840012345",
+        selections: { recipient: "Kala Akka", theme: "thanks", addOns: ["plant", "frame", "plant"] },
+      },
+      repos,
     );
-    expect((await placeOrder(pencilOrder({ deliverBy: addDays(TODAY, 9) }), repos)).ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    const order = await repos.orders.findById(result.value.orderId);
+    expect(order?.selections.addOns).toEqual(["plant", "frame"]);
+    expect(order?.itemTotalPaise).toBe(rupees(2499 + 349 + 399));
+    expect(order?.productionDays).toBe(3 + 1);
   });
 
   it("refuses orders while the artist is paused", async () => {
@@ -118,8 +142,7 @@ describe("placeOrder", () => {
         productId: data.productIds.coupleSketch!, // Karthik is paused in the demo data
         buyerName: "Test Buyer",
         buyerPhone: "9840012345",
-        deliverBy: addDays(TODAY, 20),
-        inputs: { photo: "us.jpg", size: "a4" },
+        selections: { photo: "us.jpg", size: "a4" },
       },
       repos,
     );

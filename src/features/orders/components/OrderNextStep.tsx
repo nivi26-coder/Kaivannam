@@ -9,13 +9,13 @@ import { RequestChangesForm } from "./RequestChangesForm";
 
 /** The one thing the buyer should know or do right now. */
 export function OrderNextStep({ order }: { order: OrderWithDetails }) {
-  const artistName = order.artist?.name ?? "The artist";
+  const artistName = order.creator?.name ?? "The artist";
 
   switch (order.status) {
     case "PLACED":
       return (
         <section className="space-y-3 rounded-xl border-2 border-primary/30 bg-card p-4">
-          <h2 className="font-heading text-lg font-semibold">Pay {formatINR(order.totalPrice)} to confirm</h2>
+          <h2 className="font-heading text-lg font-semibold">Pay {formatINR(order.itemTotalPaise)} to confirm</h2>
           <p className="flex gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="size-5 shrink-0 text-emerald-700" aria-hidden />
             Kaivannam holds your money safely. {artistName} is paid only after your gift is
@@ -23,7 +23,7 @@ export function OrderNextStep({ order }: { order: OrderWithDetails }) {
           </p>
           <form action={payOrderAction.bind(null, order._id)}>
             <SubmitButton className="h-11 w-full text-base" pendingText="Processing…">
-              Pay {formatINR(order.totalPrice)}
+              Pay {formatINR(order.itemTotalPaise)}
             </SubmitButton>
           </form>
           <p className="text-center text-xs text-muted-foreground">
@@ -85,7 +85,7 @@ export function OrderNextStep({ order }: { order: OrderWithDetails }) {
     case "IN_PRODUCTION":
       return (
         <Callout tone="info" title="Your gift is being made">
-          {artistName} is handcrafting it now, to deliver by {formatDate(order.deliverBy)}.
+          {artistName} is handcrafting it now, to arrive around {formatDate(order.estimatedDelivery)}.
         </Callout>
       );
 

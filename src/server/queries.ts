@@ -12,48 +12,48 @@
 import "server-only";
 import { io } from "next/cache";
 import type { OccasionSlug } from "@/domain/occasions";
-import type { Artist, OrderWithDetails, Product, ProductWithArtist } from "@/domain/types";
+import type { Creator, OrderWithDetails, Product, ProductWithCreator } from "@/domain/types";
 import { getRepositories } from "./repositories";
 
-// ---------------------------------------------------------------- artists
+// --------------------------------------------------------------- creators
 
-export async function getFeaturedArtists(limit = 6): Promise<Artist[]> {
+export async function getFeaturedCreators(limit = 6): Promise<Creator[]> {
   await io();
-  return getRepositories().artists.listFeatured(limit);
+  return getRepositories().creators.listFeatured(limit);
 }
 
-export async function getAllArtists(): Promise<Artist[]> {
+export async function getAllCreators(): Promise<Creator[]> {
   await io();
-  return getRepositories().artists.list();
+  return getRepositories().creators.list();
 }
 
 /** Null for unknown ids, including ones that aren't valid ObjectIds. */
-export async function getArtist(id: string): Promise<Artist | null> {
+export async function getCreator(id: string): Promise<Creator | null> {
   await io();
-  return getRepositories().artists.findById(id);
+  return getRepositories().creators.findById(id);
 }
 
 /** Orders delivered through the platform: a trust signal on the profile. */
-export async function getCompletedOrderCount(artistId: string): Promise<number> {
+export async function getCompletedOrderCount(creatorId: string): Promise<number> {
   await io();
-  return getRepositories().orders.countCompletedByArtist(artistId);
+  return getRepositories().orders.countCompletedByCreator(creatorId);
 }
 
 // --------------------------------------------------------------- products
 
 export async function getProducts(
   options: { occasion?: OccasionSlug; limit?: number } = {},
-): Promise<ProductWithArtist[]> {
+): Promise<ProductWithCreator[]> {
   await io();
   return getRepositories().products.list({ occasion: options.occasion, limit: options.limit ?? 24 });
 }
 
-export async function getArtistProducts(artistId: string): Promise<Product[]> {
+export async function getCreatorProducts(creatorId: string): Promise<Product[]> {
   await io();
-  return getRepositories().products.listByArtist(artistId);
+  return getRepositories().products.listByCreator(creatorId);
 }
 
-export async function getProduct(id: string): Promise<ProductWithArtist | null> {
+export async function getProduct(id: string): Promise<ProductWithCreator | null> {
   await io();
   return getRepositories().products.findById(id);
 }
@@ -65,8 +65,8 @@ export async function getOrder(id: string): Promise<OrderWithDetails | null> {
   return getRepositories().orders.findById(id);
 }
 
-/** All of an artist's orders, soonest deadline first. */
-export async function getArtistOrders(artistId: string): Promise<OrderWithDetails[]> {
+/** All of a creator's orders, soonest dispatch deadline first. */
+export async function getCreatorOrders(creatorId: string): Promise<OrderWithDetails[]> {
   await io();
-  return getRepositories().orders.listByArtist(artistId);
+  return getRepositories().orders.listByCreator(creatorId);
 }

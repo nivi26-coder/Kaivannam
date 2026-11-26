@@ -1,15 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
+import { startingPrice } from "@/domain/pricing";
+import type { CreatorSummary, Product } from "@/domain/types";
 import { formatINR } from "@/lib/format";
-import type { ArtistSummary, Product } from "@/domain/types";
 
 export function ProductCard({
   product,
-  artist,
+  creator,
 }: {
   product: Product;
-  /** Omit on the artist's own profile, where the name would be repetitive. */
-  artist?: ArtistSummary;
+  /** Omit on the creator's own profile, where the name would be repetitive. */
+  creator?: CreatorSummary;
 }) {
   return (
     <Link href={`/products/${product._id}`} className="group block">
@@ -23,7 +24,7 @@ export function ProductCard({
             className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
         )}
-        {artist && !artist.isAcceptingOrders && (
+        {creator && !creator.isAcceptingOrders && (
           <span className="absolute top-2 left-2 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium">
             Orders paused
           </span>
@@ -31,14 +32,14 @@ export function ProductCard({
       </div>
       <div className="mt-2 space-y-0.5">
         <h3 className="line-clamp-2 text-sm leading-snug font-medium">{product.title}</h3>
-        {artist && (
+        {creator && (
           <p className="truncate text-xs text-muted-foreground">
-            by {artist.name} · {artist.city}
+            by {creator.name} · {creator.city}
           </p>
         )}
         <p className="text-sm font-semibold">
           <span className="font-normal text-muted-foreground">from </span>
-          {formatINR(product.basePrice)}
+          {formatINR(startingPrice(product))}
         </p>
       </div>
     </Link>

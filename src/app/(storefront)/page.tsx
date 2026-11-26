@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { ArtistListSkeleton, ProductGridSkeleton } from "@/components/common/Skeletons";
 import { isOccasionSlug } from "@/domain/occasions";
-import { FeaturedArtists } from "@/features/catalog/components/FeaturedArtists";
+import { FeaturedCreators } from "@/features/catalog/components/FeaturedCreators";
 import { GiftGrid } from "@/features/catalog/components/GiftGrid";
 import { HomeHero } from "@/features/catalog/components/HomeHero";
 import { HowItWorks } from "@/features/catalog/components/HowItWorks";
@@ -36,7 +36,7 @@ export default function HomePage({ searchParams }: PageProps<"/">) {
         <p className="mt-1 text-sm text-muted-foreground">Independent makers from across Tamil Nadu.</p>
         <div className="mt-4">
           <Suspense fallback={<ArtistListSkeleton count={6} />}>
-            <FeaturedArtists />
+            <FeaturedCreators />
           </Suspense>
         </div>
       </section>

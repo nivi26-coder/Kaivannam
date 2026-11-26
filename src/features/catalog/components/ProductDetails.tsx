@@ -1,14 +1,20 @@
 import Link from "next/link";
 import { Clock, RotateCcw } from "lucide-react";
 import { getOccasion } from "@/domain/occasions";
-import type { ProductWithArtist } from "@/domain/types";
+import { startingPrice } from "@/domain/pricing";
+import { isChoiceGroup } from "@/domain/product-options";
+import type { ProductWithCreator } from "@/domain/types";
 import { formatINR } from "@/lib/format";
-import { ArtistAvatar } from "./ArtistAvatar";
+import { CreatorAvatar } from "./CreatorAvatar";
 import { VerifiedBadge } from "./VerifiedBadge";
 
-/** Title, price, artist and description shown next to the product photos. */
-export function ProductDetails({ product }: { product: ProductWithArtist }) {
-  const { artist } = product;
+/** Title, price, creator and description shown next to the product photos. */
+export function ProductDetails({ product }: { product: ProductWithCreator }) {
+  const { creator } = product;
+  // "7+ days" when some options add making time.
+  const optionsAddDays = product.optionGroups.some(
+    (group) => isChoiceGroup(group) && group.options.some((option) => option.extraDays > 0),
+  );
   return (
     <>
       <div className="space-y-2">
@@ -17,12 +23,13 @@ export function ProductDetails({ product }: { product: ProductWithArtist }) {
         </h1>
         <p className="text-lg">
           <span className="text-muted-foreground">from </span>
-          <span className="font-semibold">{formatINR(product.basePrice)}</span>
+          <span className="font-semibold">{formatINR(startingPrice(product))}</span>
         </p>
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <li className="inline-flex items-center gap-1">
             <Clock className="size-4" aria-hidden />
-            Made in {artist.makingTimeDays} days
+            Made in {product.baseProductionDays}
+            {optionsAddDays ? "+" : ""} days
           </li>
           <li className="inline-flex items-center gap-1">
             <RotateCcw className="size-4" aria-hidden />
@@ -32,16 +39,16 @@ export function ProductDetails({ product }: { product: ProductWithArtist }) {
       </div>
 
       <Link
-        href={`/artists/${artist._id}`}
+        href={`/artists/${creator._id}`}
         className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-secondary/40"
       >
-        <ArtistAvatar name={artist.name} avatarUrl={artist.avatarUrl} size={44} />
+        <CreatorAvatar name={creator.name} avatarUrl={creator.avatarUrl} size={44} />
         <div className="min-w-0">
           <p className="flex items-center gap-1 font-medium">
-            {artist.name}
-            {artist.isVerified && <VerifiedBadge />}
+            {creator.name}
+            {creator.isVerified && <VerifiedBadge />}
           </p>
-          <p className="text-sm text-muted-foreground">{artist.city} · View profile</p>
+          <p className="text-sm text-muted-foreground">{creator.city} · View profile</p>
         </div>
       </Link>
 

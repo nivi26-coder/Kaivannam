@@ -7,14 +7,14 @@ import { fail, ok, type Result } from "./result";
  * The dashboard's pause toggle. We set the value explicitly instead of
  * flipping it, so a double-click can't pause and immediately un-pause.
  *
- * DEMO NOTE: no login yet. In the MVP, check the caller is this artist.
+ * DEMO NOTE: no login yet. In the MVP, check the caller is this creator.
  */
 export async function setAcceptingOrders(
-  artistId: string,
+  creatorId: string,
   accepting: boolean,
   repos: Repositories = getRepositories(),
 ): Promise<Result> {
-  if (!isValidObjectId(artistId)) return fail("Artist not found.");
-  await repos.artists.setAcceptingOrders(artistId, accepting);
+  if (!isValidObjectId(creatorId)) return fail("Creator not found.");
+  await repos.creators.setAcceptingOrders(creatorId, accepting);
   return ok();
 }

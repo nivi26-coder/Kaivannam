@@ -1,29 +1,33 @@
 "use client";
 
-// The product's customization form. It's a Client Component because the
-// price has to update as the buyer types and taps, which needs React state
-// in the browser.
+// The product's configurator. It's a Client Component because the price and
+// making time update as the buyer taps, which needs React state in the browser.
 //
-// The price shown here is only a preview. On submit the browser sends the
+// The total shown here is only a preview. On submit the browser sends the
 // buyer's *choices*, never a price; the placeOrder service loads the product
-// from the database and runs the same calculatePrice() to get the real total.
+// from the database and runs the same quoteItem() to get the real total.
 
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
-import { ImageIcon, ShieldCheck } from "lucide-react";
+import { CalendarDays, ImageIcon, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { validateBuyerDetails } from "@/domain/buyer";
+import { DEFAULT_TRANSIT_DAYS, estimateDelivery } from "@/domain/delivery";
+import type { FieldErrors } from "@/domain/errors";
+import type { Paise } from "@/domain/money";
+import { quoteItem } from "@/domain/pricing";
 import {
-  getInitialInputs,
-  MAX_TEXT_LENGTH,
-  validateInputs,
-  type FieldErrors,
-} from "@/domain/custom-fields";
-import { SHIPPING_DAYS, validateDeliverBy, type DeliveryWindow } from "@/domain/delivery";
-import { getPriceLines } from "@/domain/pricing";
-import type { CustomField, CustomInputs } from "@/domain/types";
+  getInitialSelections,
+  isGroupRequired,
+  validateSelections,
+  type MultiChoiceGroup,
+  type OptionChoice,
+  type OptionGroup,
+  type Selections,
+  type SingleChoiceGroup,
+} from "@/domain/product-options";
 import { formatDate } from "@/lib/dates";
 import { formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,14 +35,13 @@ import { placeOrderAction, type PlaceOrderState } from "../actions";
 
 type Props = {
   productId: string;
-  basePrice: number;
-  customFields: CustomField[];
+  basePricePaise: Paise;
+  baseProductionDays: number;
+  optionGroups: OptionGroup[];
   maxRevisions: number;
-  artistName: string;
-  makingTimeDays: number;
   isAcceptingOrders: boolean;
-  /** Allowed delivery dates, computed on the server in Indian time. */
-  delivery: DeliveryWindow;
+  /** Today in India ("YYYY-MM-DD"), from the server at request time. */
+  today: string;
 };
 
 const initialState: PlaceOrderState = {};
@@ -49,48 +52,58 @@ function omit(errors: FieldErrors, key: string): FieldErrors {
   return next;
 }
 
-/** Messages, quotes and notes get a multi-line box; other text stays one line. */
-function isLongText(field: CustomField) {
-  return /message|quote|note/i.test(field.key);
+function signedPrice(amount: Paise) {
+  return amount > 0 ? `+${formatINR(amount)}` : `−${formatINR(Math.abs(amount))}`;
 }
 
-function signedPrice(amount: number) {
-  return amount > 0 ? `+${formatINR(amount)}` : `−${formatINR(Math.abs(amount))}`;
+const days = (n: number) => `${n} ${n === 1 ? "day" : "days"}`;
+
+/** "+₹600 · +1 day" for an option that changes price or time. */
+function optionImpact(option: OptionChoice): string {
+  return [
+    option.pricePaise !== 0 ? signedPrice(option.pricePaise) : null,
+    option.extraDays > 0 ? `+${days(option.extraDays)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Messages, quotes and notes get a multi-line box; other text stays one line. */
+function isLongText(group: OptionGroup) {
+  return group.type === "text" && group.maxLength > 60;
 }
 
 export function CustomizationForm({
   productId,
-  basePrice,
-  customFields,
+  basePricePaise,
+  baseProductionDays,
+  optionGroups,
   maxRevisions,
-  artistName,
-  makingTimeDays,
   isAcceptingOrders,
-  delivery,
+  today,
 }: Props) {
   const [state, formAction, isPending] = useActionState(placeOrderAction, initialState);
 
-  // Every input is controlled: the live price reads from this state, and a
+  // Every input is controlled: the live total reads from this state, and a
   // failed submit keeps everything the buyer typed.
-  const [inputs, setInputs] = useState<CustomInputs>(() => getInitialInputs(customFields));
+  const [selections, setSelections] = useState<Selections>(() => getInitialSelections(optionGroups));
   const [buyerName, setBuyerName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
-  const [deliverBy, setDeliverBy] = useState(delivery.earliest);
 
   // Errors found in the browser take priority; otherwise show the server's.
   const [clientErrors, setClientErrors] = useState<FieldErrors | null>(null);
   const errors = clientErrors ?? state.errors ?? {};
 
   const formRef = useRef<HTMLFormElement>(null);
-  const priceLines = getPriceLines({ basePrice, customFields }, inputs);
-  const total = priceLines.reduce((sum, line) => sum + line.amount, 0);
+  const quote = quoteItem({ basePricePaise, baseProductionDays, optionGroups }, selections);
+  const estimate = estimateDelivery({ productionDays: quote.productionDays, today });
 
   function clearError(key: string) {
     if (errors[key]) setClientErrors(omit(errors, key));
   }
 
-  function setInput(key: string, value: string) {
-    setInputs((prev) => ({ ...prev, [key]: value }));
+  function setSelection(key: string, value: string | string[]) {
+    setSelections((prev) => ({ ...prev, [key]: value }));
     clearError(key);
   }
 
@@ -100,10 +113,8 @@ export function CustomizationForm({
     event.preventDefault();
 
     // The same domain checks the server runs, for instant feedback.
-    const found = validateInputs(customFields, inputs);
+    const found = validateSelections(optionGroups, selections);
     Object.assign(found, validateBuyerDetails({ buyerName, buyerPhone }).errors);
-    const deliverByError = validateDeliverBy(deliverBy, delivery, artistName);
-    if (deliverByError) found.deliverBy = deliverByError;
 
     if (Object.keys(found).length > 0) {
       setClientErrors(found);
@@ -125,13 +136,13 @@ export function CustomizationForm({
       <fieldset disabled={!isAcceptingOrders || isPending} className="space-y-6">
         <section className="space-y-5">
           <h2 className="font-heading text-lg font-semibold">Make it yours</h2>
-          {customFields.map((field) => (
-            <CustomFieldInput
-              key={field.key}
-              field={field}
-              value={inputs[field.key] ?? ""}
-              error={errors[field.key]}
-              onChange={(value) => setInput(field.key, value)}
+          {optionGroups.map((group) => (
+            <OptionGroupInput
+              key={group.key}
+              group={group}
+              value={selections[group.key] ?? (group.type === "multi" ? [] : "")}
+              error={errors[group.key]}
+              onChange={(value) => setSelection(group.key, value)}
             />
           ))}
         </section>
@@ -183,47 +194,35 @@ export function CustomizationForm({
               />
             }
           />
-          <TextRow
-            id="deliverBy"
-            label="Deliver by"
-            hint={`Earliest ${formatDate(delivery.earliest)}: ${makingTimeDays} days to make + ${SHIPPING_DAYS} for delivery.`}
-            error={errors.deliverBy}
-            input={
-              <Input
-                id="deliverBy"
-                name="deliverBy"
-                type="date"
-                min={delivery.earliest}
-                max={delivery.latest}
-                value={deliverBy}
-                onChange={(e) => {
-                  setDeliverBy(e.target.value);
-                  clearError("deliverBy");
-                }}
-                aria-invalid={Boolean(errors.deliverBy)}
-                aria-describedby={errors.deliverBy ? "deliverBy-error" : "deliverBy-hint"}
-                className="h-11 text-base"
-              />
-            }
-          />
         </section>
       </fieldset>
 
       <section aria-labelledby="price-heading" className="space-y-3 rounded-xl border bg-card p-4">
         <h2 id="price-heading" className="font-heading text-lg font-semibold">
-          Price
+          Price and timing
         </h2>
         <dl className="space-y-1.5 text-sm">
-          {priceLines.map((line) => (
+          {quote.lines.map((line) => (
             <div key={line.label} className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">{line.label}</dt>
+              <dt className="text-muted-foreground">
+                {line.label}
+                {line.extraDays > 0 && <span className="text-xs"> (+{days(line.extraDays)})</span>}
+              </dt>
               <dd className="tabular-nums">
-                {line.label === "Base price" ? formatINR(line.amount) : signedPrice(line.amount)}
+                {line.label === "Base price" ? formatINR(line.amountPaise) : line.amountPaise === 0 ? "—" : signedPrice(line.amountPaise)}
               </dd>
             </div>
           ))}
         </dl>
-        <ul className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <p className="flex gap-1.5 border-t pt-3 text-sm">
+          <CalendarDays className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span>
+            Ready to ship in {days(quote.productionDays)}. Arrives around{" "}
+            <strong>{formatDate(estimate.deliverBy)}</strong>
+            <span className="text-xs text-muted-foreground"> (allowing {DEFAULT_TRANSIT_DAYS} days for the courier)</span>
+          </span>
+        </p>
+        <ul className="space-y-1 text-xs text-muted-foreground">
           <li className="flex gap-1.5">
             <ShieldCheck className="size-4 shrink-0 text-emerald-700" aria-hidden />
             Your money is held by Kaivannam and released to the artist only after delivery.
@@ -247,7 +246,7 @@ export function CustomizationForm({
           <div>
             <p className="text-xs text-muted-foreground">Total</p>
             <p className="text-2xl font-semibold tabular-nums" aria-live="polite">
-              {formatINR(total)}
+              {formatINR(quote.itemTotalPaise)}
             </p>
           </div>
           <Button
@@ -297,96 +296,91 @@ function TextRow({
   );
 }
 
-function CustomFieldInput({
-  field,
+const CHIP =
+  "cursor-pointer rounded-full border bg-card px-3.5 py-2 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/10 has-checked:text-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/50";
+
+function OptionGroupInput({
+  group,
   value,
   error,
   onChange,
 }: {
-  field: CustomField;
-  value: string;
+  group: OptionGroup;
+  value: string | string[];
   error?: string;
-  onChange: (value: string) => void;
+  onChange: (value: string | string[]) => void;
 }) {
-  const id = `field-${field.key}`;
-  const name = `field:${field.key}`;
-  const label = field.required ? field.label : `${field.label} (optional)`;
+  const id = `option-${group.key}`;
+  // Every answer is submitted as "option:<key>"; checkboxes repeat the name.
+  const name = `option:${group.key}`;
+  const label = isGroupRequired(group) ? group.label : `${group.label} (optional)`;
   const errorProps = {
     "aria-invalid": Boolean(error),
     "aria-describedby": error ? `${id}-error` : undefined,
   };
+  const text = typeof value === "string" ? value : "";
 
-  if (field.type === "select" && field.options.length <= 4) {
-    // Few options: show them all as tappable chips, with their price impact.
+  if (group.type === "single" && group.options.length <= 4) {
+    return <ChoiceChips group={group} id={id} name={name} label={label} selected={[text]} error={error} onSelect={(v) => onChange(v)} />;
+  }
+
+  if (group.type === "multi") {
+    const picked = Array.isArray(value) ? value : [];
     return (
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">{label}</legend>
-        <div className="flex flex-wrap gap-2">
-          {field.options.map((option, index) => (
-            <label
-              key={option.value}
-              className="cursor-pointer rounded-full border bg-card px-3.5 py-2 text-sm transition-colors has-checked:border-primary has-checked:bg-primary/10 has-checked:text-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
-            >
-              <input
-                type="radio"
-                name={name}
-                value={option.value}
-                checked={value === option.value}
-                onChange={() => onChange(option.value)}
-                className="sr-only"
-                {...(index === 0 ? errorProps : {})}
-              />
-              {option.label}
-              {option.priceModifier !== 0 && (
-                <span className="ml-1.5 text-xs opacity-75">{signedPrice(option.priceModifier)}</span>
-              )}
-            </label>
-          ))}
-        </div>
-        <FieldError id={id} error={error} />
-      </fieldset>
+      <ChoiceChips
+        group={group}
+        id={id}
+        name={name}
+        label={group.max < group.options.length ? `${label} · up to ${group.max}` : label}
+        selected={picked}
+        error={error}
+        onSelect={(v) => onChange(picked.includes(v) ? picked.filter((p) => p !== v) : [...picked, v])}
+      />
     );
   }
 
-  if (field.type === "select") {
+  if (group.type === "single") {
     return (
       <div className="space-y-1.5">
         <Label htmlFor={id}>{label}</Label>
         <select
           id={id}
           name={name}
-          value={value}
+          value={text}
           onChange={(e) => onChange(e.target.value)}
           className="h-11 w-full rounded-lg border border-input bg-card px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive"
           {...errorProps}
         >
-          {!field.required && <option value="">None</option>}
-          {field.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-              {option.priceModifier !== 0 ? ` (${signedPrice(option.priceModifier)})` : ""}
-            </option>
-          ))}
+          {!group.required && <option value="">None</option>}
+          {group.options.map((option) => {
+            const impact = optionImpact(option);
+            return (
+              <option key={option.value} value={option.value}>
+                {option.label}
+                {impact ? ` (${impact})` : ""}
+              </option>
+            );
+          })}
         </select>
         <FieldError id={id} error={error} />
       </div>
     );
   }
 
-  if (field.type === "image") {
-    return <PhotoField id={id} name={name} label={label} value={value} error={error} onChange={onChange} />;
+  if (group.type === "photo") {
+    return <PhotoField id={id} name={name} label={label} value={text} error={error} onChange={onChange} />;
   }
 
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      {isLongText(field) ? (
+      {isLongText(group) ? (
         <Textarea
           id={id}
           name={name}
           rows={3}
-          maxLength={MAX_TEXT_LENGTH}
-          value={value}
+          maxLength={group.maxLength}
+          value={text}
           onChange={(e) => onChange(e.target.value)}
           className="text-base"
           {...errorProps}
@@ -395,8 +389,8 @@ function CustomFieldInput({
         <Input
           id={id}
           name={name}
-          maxLength={MAX_TEXT_LENGTH}
-          value={value}
+          maxLength={group.maxLength}
+          value={text}
           onChange={(e) => onChange(e.target.value)}
           className="h-11 text-base"
           {...errorProps}
@@ -407,10 +401,58 @@ function CustomFieldInput({
   );
 }
 
+/** Tappable chips showing each option's price and time impact: radios for single choice, checkboxes for add-ons. */
+function ChoiceChips({
+  group,
+  id,
+  name,
+  label,
+  selected,
+  error,
+  onSelect,
+}: {
+  group: SingleChoiceGroup | MultiChoiceGroup;
+  id: string;
+  name: string;
+  label: string;
+  selected: string[];
+  error?: string;
+  onSelect: (value: string) => void;
+}) {
+  const isMulti = group.type === "multi";
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{label}</legend>
+      <div className="flex flex-wrap gap-2">
+        {group.options.map((option, index) => {
+          const impact = optionImpact(option);
+          return (
+            <label key={option.value} className={CHIP}>
+              <input
+                type={isMulti ? "checkbox" : "radio"}
+                name={name}
+                value={option.value}
+                checked={selected.includes(option.value)}
+                onChange={() => onSelect(option.value)}
+                className="sr-only"
+                aria-invalid={index === 0 ? Boolean(error) : undefined}
+                aria-describedby={index === 0 && error ? `${id}-error` : undefined}
+              />
+              {option.label}
+              {impact && <span className="ml-1.5 text-xs opacity-75">{impact}</span>}
+            </label>
+          );
+        })}
+      </div>
+      <FieldError id={id} error={error} />
+    </fieldset>
+  );
+}
+
 /**
  * Demo version of a photo upload. The chosen photo is previewed locally but
  * never leaves the phone; only its file name is submitted. Real uploads
- * (Cloudinary) come in the MVP.
+ * (Supabase Storage) come in T1.9.
  */
 function PhotoField({
   id,
